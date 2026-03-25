@@ -1,0 +1,226 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+:root {
+  --background: #0f1623;
+  --foreground: #e8edf5;
+  --green: #00C48C;
+  --green-hover: #00b07d;
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #0f1623;
+  color: #e8edf5;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+/* ─── Colori di sfondo ───────────────────────────────────────────── */
+.bg-z-darker  { background: #090d16; }
+.bg-z-dark    { background: #0f1623; }
+.bg-z-mid     { background: #1a2235; }
+.bg-z-card    { background: #1e2a3d; }
+.bg-z-surface { background: #243046; }
+
+/* ─── Colori testo ───────────────────────────────────────────────── */
+.text-z-light  { color: #e8edf5; }
+.text-z-soft   { color: #c4cdd9; }
+.text-z-muted  { color: #8896aa; }
+.text-z-dim    { color: #4d6070; }
+.text-z-green  { color: #00C48C; }
+.text-z-orange { color: #FF6B35; }
+.text-z-dark   { color: #0f1623; }
+
+/* ─── Sfondi colori ──────────────────────────────────────────────── */
+.bg-z-green  { background: #00C48C; }
+.bg-z-orange { background: #FF6B35; }
+
+/* ─── Tipografia ─────────────────────────────────────────────────── */
+.font-head { font-family: 'Inter', sans-serif; font-weight: 700; }
+.font-body { font-family: 'Inter', sans-serif; }
+
+/* ─── Effetti ────────────────────────────────────────────────────── */
+.glow-green { text-shadow: 0 0 30px rgba(0, 196, 140, 0.4); }
+
+/* ─── Bottoni ────────────────────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #00C48C;
+  color: #0f1623;
+  font-weight: 700;
+  padding: 11px 22px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 4px 20px rgba(0, 196, 140, 0.25);
+}
+.btn-primary:hover {
+  background: #00b07d;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(0, 196, 140, 0.35);
+}
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #e8edf5;
+  font-weight: 600;
+  padding: 11px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  color: #8896aa;
+  font-weight: 600;
+  padding: 11px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+.btn-ghost:hover {
+  color: #e8edf5;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-orange {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #FF6B35;
+  color: #fff;
+  font-weight: 700;
+  padding: 11px 22px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  box-shadow: 0 4px 20px rgba(255, 107, 53, 0.25);
+}
+.btn-orange:hover {
+  background: #e85d2a;
+  transform: translateY(-1px);
+}
+
+/* ─── Input ──────────────────────────────────────────────────────── */
+.input-field {
+  width: 100%;
+  background: #1a2235;
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  color: #e8edf5;
+  padding: 12px 16px;
+  font-size: 14px;
+  border-radius: 12px;
+  outline: none;
+  transition: all 0.2s ease;
+  font-family: 'Inter', sans-serif;
+}
+.input-field::placeholder { color: #4d6070; }
+.input-field:focus {
+  border-color: #00C48C;
+  background: #1e2a3d;
+  box-shadow: 0 0 0 3px rgba(0, 196, 140, 0.1);
+}
+
+.label-field {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8896aa;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 7px;
+}
+
+/* ─── Card generica ──────────────────────────────────────────────── */
+.card {
+  background: #1a2235;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  padding: 24px;
+  transition: border-color 0.2s;
+}
+.card:hover { border-color: rgba(255, 255, 255, 0.14); }
+
+.card-green {
+  background: linear-gradient(135deg, rgba(0, 196, 140, 0.08), rgba(0, 196, 140, 0.03));
+  border: 1px solid rgba(0, 196, 140, 0.2);
+  border-radius: 18px;
+  padding: 24px;
+}
+
+/* ─── Badge ──────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.badge-green { background: rgba(0, 196, 140, 0.12); color: #00C48C; border: 1px solid rgba(0, 196, 140, 0.2); }
+.badge-orange { background: rgba(255, 107, 53, 0.12); color: #FF6B35; border: 1px solid rgba(255, 107, 53, 0.2); }
+.badge-blue { background: rgba(99, 179, 237, 0.12); color: #90cdf4; border: 1px solid rgba(99, 179, 237, 0.2); }
+
+/* ─── Scrollbar ──────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.18); }
+
+/* ─── Selezione testo ────────────────────────────────────────────── */
+::selection { background: rgba(0, 196, 140, 0.25); color: #e8edf5; }
+
+/* ─── Link ───────────────────────────────────────────────────────── */
+a { color: inherit; text-decoration: none; }
+
+/* ─── Divisore ───────────────────────────────────────────────────── */
+.divider { height: 1px; background: rgba(255, 255, 255, 0.07); }
