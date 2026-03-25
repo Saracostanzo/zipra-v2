@@ -33,3 +33,5 @@ Thumbs.db
 coverage/
 .vercel/
 tsconfig.tsbuildinfo
+
+.vercel

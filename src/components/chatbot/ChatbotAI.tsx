@@ -112,7 +112,7 @@ function salvaContestoPerWizard(pratica: PraticaCatalogo & { prezzi: any }, stor
   }
 
   // Per apertura_ditta/srl deriva il settore dall'idea utente
-  const ideaText = (storia.find(m => m.ruolo === 'user')?.testo ?? '').toLowerCase()
+  const ideaText = [...storia.filter(m => m.ruolo === 'user').map(m => m.testo), pratica.titolo].join(' ').toLowerCase()
   const settoreDaIdea = (() => {
     if (/bar|ristoran|pizzer|pasticcer|gelateria|pub|trattoria|osteria|caffè|caffe|somministr/.test(ideaText)) return 'ristorazione'
     if (/negozio|commercio|vendita|shop|boutique|abbigliamento|alimentari/.test(ideaText)) return 'commercio'

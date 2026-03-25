@@ -2,12 +2,12 @@
  * YOUSIGN v3 — Integrazione completa firma digitale e deleghe
  *
  * Flusso corretto v3:
- *   1. POST /signature_requests           → crea la richiesta (senza documenti)
- *   2. POST /signature_requests/:id/documents  → carica PDF (NON /documents standalone)
- *   3. POST /signature_requests/:id/signatories → aggiungi firmatario
- *   4. POST /signature_requests/:id/signature_fields → campo firma visivo
- *   5. POST /signature_requests/:id/activate  → invia email al cliente
- *   6. GET  /signature_requests/:id/signatories/:sid → ottieni link firma
+ *   1. POST /signature_requests                        → crea la richiesta (senza documenti)
+ *   2. POST /signature_requests/:id/documents          → carica PDF (NON /documents standalone)
+ *   3. POST /signature_requests/:id/signatories        → aggiungi firmatario
+ *   4. POST /signature_requests/:id/signature_fields   → campo firma visivo
+ *   5. POST /signature_requests/:id/activate           → invia email al cliente
+ *   6. GET  /signature_requests/:id/signatories/:sid   → ottieni link firma
  *
  * API docs: https://developers.yousign.com/reference
  * Sandbox:  https://staging-api.yousign.app/v3
@@ -19,7 +19,7 @@ const BASE =
     ? 'https://staging-api.yousign.app/v3'
     : 'https://api.yousign.app/v3'
 
-// Header JSON (NO Content-Type per le chiamate multipart)
+// Header JSON — NON usato per le chiamate multipart (FormData gestisce Content-Type da solo)
 const H = (): Record<string, string> => ({
   Authorization: `Bearer ${process.env.YOUSIGN_API_KEY!}`,
   'Content-Type': 'application/json',
@@ -114,7 +114,7 @@ export async function creaRichiestaDiFirma({
     console.log('[Yousign] Signature request creata:', requestId)
 
     // ── Step 2: Carica il documento PDF sotto la signature request ──────────────
-    // FIX: l'endpoint è /signature_requests/:id/documents, NON /documents standalone
+    // IMPORTANTE: NON impostare Content-Type — FormData lo imposta da solo con il boundary
     const formData = new FormData()
     const arrayBuffer = pdfBuffer.buffer.slice(
       pdfBuffer.byteOffset,
@@ -130,8 +130,8 @@ export async function creaRichiestaDiFirma({
     const uploadRes = await fetch(`${BASE}/signature_requests/${requestId}/documents`, {
       method: 'POST',
       headers: {
-        // FIX: NON impostare Content-Type — FormData lo imposta da solo con boundary
         Authorization: `Bearer ${process.env.YOUSIGN_API_KEY!}`,
+        // NON aggiungere Content-Type qui — FormData lo gestisce autonomamente
       },
       body: formData,
     })
@@ -176,7 +176,6 @@ export async function creaRichiestaDiFirma({
     console.log('[Yousign] Firmatario aggiunto:', signerId)
 
     // ── Step 4: Aggiungi campo firma visivo ─────────────────────────────────────
-    // FIX: l'endpoint è /signature_fields (NON /documents/:id/fields)
     const campo = campiDaFirmare?.[0] ?? {
       pagina: 1,
       x: 50,
@@ -284,14 +283,12 @@ export async function scaricaPDFFirmato(requestId: string, documentId: string): 
 
 // ─── 4. Webhook parser ────────────────────────────────────────────────────────
 //
-// FIX: gli event_type corretti in v3 sono:
-//   'signature_request.done'     → tutta la richiesta completata
-//   'signature_request.declined' → firmatario ha rifiutato
-//   'signature_request.expired'  → scaduta
-//   'signer.done'                → singolo firmatario ha firmato (usato con più firmatari)
-//
-// Il vecchio codice usava 'signer.done' come "firmata" ma in v3 con 1 firmatario
-// l'evento finale è 'signature_request.done'
+// Gli event_type corretti in v3:
+//   'signature_request.done'      → tutta la richiesta completata (evento principale)
+//   'signature_request.declined'  → firmatario ha rifiutato
+//   'signature_request.expired'   → scaduta
+//   'signer.done'                 → singolo firmatario ha firmato (con più firmatari)
+//   'signer.notified'             → email inviata al firmatario
 
 export function parseYousignWebhook(body: unknown): {
   tipo: 'firmata' | 'rifiutata' | 'visualizzata' | 'scaduta' | 'altro'
@@ -310,7 +307,6 @@ export function parseYousignWebhook(body: unknown): {
   const signerId = signer?.id as string | undefined
   const externalId = sr?.external_id as string | undefined
 
-  // v3 eventi principali
   if (eventType === 'signature_request.done') return { tipo: 'firmata', requestId, signerId, externalId }
   if (eventType === 'signature_request.declined') return { tipo: 'rifiutata', requestId, signerId, externalId }
   if (eventType === 'signature_request.expired') return { tipo: 'scaduta', requestId, externalId }

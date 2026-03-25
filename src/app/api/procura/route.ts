@@ -1,80 +1,100 @@
+/**
+ * src/app/api/procura/route.ts
+ *
+ * Genera e invia la procura speciale via Yousign.
+ * Chiamato manualmente dal frontend o da avviaOnboardingFirma().
+ *
+ * BUG FIX: la funzione buildPDFBuffer usava pdfLines.length (caratteri JS)
+ * per il campo /Length del PDF, ma il PDF richiede la lunghezza in byte.
+ * Con testi contenenti caratteri non-ASCII (accenti, simboli italiani come
+ * à è ì ò ù), i byte UTF-8 sono più dei caratteri JS → il PDF era malformato
+ * e Yousign lo rifiutava con errore 422.
+ * CORREZIONE: Buffer.byteLength(pdfLines, 'utf-8')
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { creaRichiestaDiFirma, getStatoFirma } from "@/lib/yousign";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { creaRichiestaDiFirma } from "@/lib/yousign";
 
-// ─── Testo legale procura ─────────────────────────────────────────────────────
+// ─── Testo procura speciale ───────────────────────────────────────────────────
 
-function buildTestoProcura(dati: {
+function buildTestoProcura({
+  nome,
+  cognome,
+  data_nascita,
+  luogo_nascita,
+  codice_fiscale,
+  residenza,
+}: {
   nome: string;
   cognome: string;
-  luogo_nascita: string;
   data_nascita: string;
+  luogo_nascita: string;
   codice_fiscale: string;
   residenza: string;
 }): string {
   const oggi = new Date().toLocaleDateString("it-IT");
+  const scadenza = new Date(
+    Date.now() + 365 * 24 * 60 * 60 * 1000
+  ).toLocaleDateString("it-IT");
+
   return `PROCURA SPECIALE
 
-Il/La sottoscritto/a ${dati.nome} ${dati.cognome}, nato/a a ${dati.luogo_nascita} il ${dati.data_nascita},
-codice fiscale ${dati.codice_fiscale}, residente in ${dati.residenza}
-(di seguito "il Mandante"),
+Il/La sottoscritto/a ${nome} ${cognome},
+nato/a a ${luogo_nascita} il ${data_nascita},
+codice fiscale: ${codice_fiscale},
+residente in ${residenza},
 
 CONFERISCE PROCURA SPECIALE
 
-a Zipra S.r.l., nella persona dei suoi rappresentanti legali pro tempore
-(di seguito "il Mandatario"),
+a Zipra S.r.l., con sede legale in Italia,
+per svolgere in nome e per conto del/la sottoscritto/a le seguenti attività:
 
-a compiere in nome e per conto del Mandante tutti gli atti e le formalità necessarie per:
-
-a) Presentare pratiche presso il Registro delle Imprese e la Camera di Commercio
-   competente, incluse domande di iscrizione, variazione e cessazione;
-
-b) Trasmettere la Comunicazione Unica (ComUnica) per l'apertura, variazione e
-   cessazione di impresa ai sensi del D.Lgs. 25 novembre 2016, n. 219;
-
-c) Presentare Segnalazioni Certificate di Inizio Attività (SCIA) allo Sportello
-   Unico delle Attività Produttive (SUAP) di qualsiasi Comune;
-
-d) Richiedere all'Agenzia delle Entrate il codice fiscale e/o la partita IVA,
-   nonché effettuare variazioni di dati anagrafici fiscali;
-
-e) Richiedere l'iscrizione alla gestione previdenziale INPS per artigiani e
-   commercianti, nonché a qualsiasi altra gestione INPS pertinente;
-
-f) Richiedere certificati e documenti amministrativi, incluso il certificato del
-   casellario giudiziale, ai fini esclusivi delle pratiche sopra indicate;
-
-g) Compiere qualsiasi ulteriore atto amministrativo connesso all'apertura,
-   gestione e cessazione dell'attività imprenditoriale del Mandante.
+1. Apertura Partita IVA presso Agenzia delle Entrate (modello AA9/AA7)
+2. Iscrizione al Registro delle Imprese presso la Camera di Commercio competente (ComUnica)
+3. Iscrizione alla gestione previdenziale INPS (artigiani, commercianti o gestione separata)
+4. Presentazione SCIA o domanda di autorizzazione al SUAP del Comune
+5. Notifica sanitaria all'ASL/ATS competente per attività alimentari o sanitarie
+6. Comunicazione dell'indirizzo PEC al Registro delle Imprese
+7. Comunicazione del titolare effettivo al Registro Titolari Effettivi
+8. Variazioni, integrazioni e reinoltri relativi alle pratiche elencate
+9. Ricezione di comunicazioni, ricevute e notifiche dagli enti competenti
 
 La presente procura NON include poteri patrimoniali, contrattuali o di disposizione
-di beni del Mandante ed è valida per la durata del rapporto contrattuale con Zipra.
-Può essere revocata in qualsiasi momento con comunicazione scritta a info@zipra.it.
+di beni del Mandante ed e' valida per la durata del rapporto contrattuale con Zipra.
+Puo' essere revocata in qualsiasi momento con comunicazione scritta a info@zipra.it.
 
-Data: ${oggi}
+Validita': dal ${oggi} al ${scadenza}
 
 Il Mandante (firma digitale): ____________________________
 `;
 }
 
-// ─── Genera PDF minimo da testo (senza dipendenze esterne) ───────────────────
+// ─── Genera PDF minimale da testo ────────────────────────────────────────────
+// BUG FIX: usa Buffer.byteLength invece di .length per il campo /Length
+// .length conta i caratteri UTF-16 di JavaScript, ma il PDF vuole i byte UTF-8.
+// Con accenti italiani (à, è, ecc.) ogni carattere occupa 2 byte → length < byteLength
+// → il parser PDF pensava che lo stream fosse troncato → file corrotto.
 
 function buildPDFBuffer(testo: string): Buffer {
-  // PDF minimale valido — Yousign lo accetta per aggiungere il campo firma sopra
   const lines = testo.split("\n");
   const pdfLines = lines
     .map(
       (line, i) =>
-        `BT /F1 10 Tf 50 ${750 - i * 14} Td (${line.replace(/[()\\]/g, "\\$&")}) Tj ET`,
+        `BT /F1 10 Tf 50 ${750 - i * 14} Td (${line.replace(/[()\\]/g, "\\$&")}) Tj ET`
     )
     .join("\n");
+
+  // BUG FIX: Buffer.byteLength per la lunghezza corretta in byte
+  const streamLength = Buffer.byteLength(pdfLines, "utf-8");
 
   const content = `%PDF-1.4
 1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
 3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>endobj
 4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
-5 0 obj<</Length ${pdfLines.length}>>
+5 0 obj<</Length ${streamLength}>>
 stream
 ${pdfLines}
 endstream
@@ -88,7 +108,6 @@ trailer<</Size 6/Root 1 0 R>>
 }
 
 // ─── POST /api/procura ────────────────────────────────────────────────────────
-// Genera e invia procura speciale via Yousign
 
 export async function POST(req: NextRequest) {
   const supabase = createServerSupabaseClient();
@@ -111,7 +130,17 @@ export async function POST(req: NextRequest) {
     telefono,
   } = await req.json();
 
-  // Costruisci testo e PDF
+  // Valida telefono — non usiamo più il fallback fittizio
+  if (!telefono || telefono.trim() === "") {
+    return NextResponse.json(
+      {
+        error:
+          "Numero di telefono obbligatorio per l'invio dell'OTP di firma. Aggiornalo nel tuo profilo.",
+      },
+      { status: 400 }
+    );
+  }
+
   const testo = buildTestoProcura({
     nome,
     cognome,
@@ -130,7 +159,7 @@ export async function POST(req: NextRequest) {
       nome,
       cognome,
       email,
-      telefono,
+      telefono: telefono.trim(),
       pdfBuffer,
       nomePDF: `procura-speciale-${codice_fiscale}.pdf`,
       tipoFirma: "electronic_signature",
@@ -169,29 +198,30 @@ export async function POST(req: NextRequest) {
         messaggio: `Procura inviata via email a ${email} — firma con OTP SMS`,
       });
     }
+
+    // Se creaRichiestaDiFirma restituisce null, registra un todo admin
+    console.error("[Procura] creaRichiestaDiFirma ha restituito null");
   }
 
-  // ─── Mock: salva bozza su storage e crea todo admin ──────────────────────
+  // ─── Fallback mock: salva bozza su storage e crea todo admin ─────────────
+  const adminSupabase = createAdminClient();
   const fileName = `procura_${codice_fiscale}_${Date.now()}.pdf`;
   const storagePath = `${user.id}/procure/${fileName}`;
 
-  await supabase.storage
+  await adminSupabase.storage
     .from("documenti-pratiche")
     .upload(storagePath, pdfBuffer, { contentType: "application/pdf" });
 
-  const { data: urlData } = supabase.storage
+  const { data: urlData } = adminSupabase.storage
     .from("documenti-pratiche")
     .getPublicUrl(storagePath);
 
   await supabase
     .from("profiles")
-    .update({
-      procura_bozza_url: urlData.publicUrl,
-    })
+    .update({ procura_bozza_url: urlData.publicUrl })
     .eq("id", user.id);
 
-  // Todo admin per firma manuale
-  await supabase.from("todo_admin").insert({
+  await adminSupabase.from("todo_admin").insert({
     pratica_id: pratica_id || null,
     tipo: "procura_firma_manuale",
     priorita: "altissima",
@@ -200,92 +230,15 @@ export async function POST(req: NextRequest) {
       `1. Configura YOUSIGN_API_KEY in .env per automatizzare`,
       `2. Nel frattempo: scarica la bozza → ${urlData.publicUrl}`,
       `3. Invia PDF via email a ${email} e chiedi firma autografa`,
-      `4. Dopo firma: aggiorna profiles.procura_firmata = true per user ${user.id}`,
-    ].join("\n"),
-    dati: {
-      nome,
-      cognome,
-      codice_fiscale,
-      email,
-      procura_url: urlData.publicUrl,
-    },
-    completato: false,
+      `4. Una volta firmata, carica il PDF firmato nell'archivio e aggiorna lo stato`,
+    ],
   });
 
   return NextResponse.json({
     success: true,
     mock: true,
-    procura_bozza_url: urlData.publicUrl,
+    bozza_url: urlData.publicUrl,
     messaggio:
-      "Procura generata — in attesa di firma manuale (configura Yousign per automatizzare)",
+      "Yousign non configurato — bozza salvata e todo admin creato per firma manuale",
   });
-}
-
-// ─── GET /api/procura?pratica_id=xxx ─────────────────────────────────────────
-// Controlla se la procura è stata firmata
-
-export async function GET(req: NextRequest) {
-  const supabase = createServerSupabaseClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user)
-    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-
-  const { searchParams } = new URL(req.url);
-  const pratica_id = searchParams.get("pratica_id");
-
-  // Leggi stato dal profilo
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("procura_firmata, procura_url, yousign_procura_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) return NextResponse.json({ firmata: false });
-
-  // Se già firmata in DB → ritorna subito
-  if (profile.procura_firmata) {
-    return NextResponse.json({
-      firmata: true,
-      procura_url: profile.procura_url,
-    });
-  }
-
-  // Se Yousign configurato e c'è un request_id → controlla stato live
-  if (process.env.YOUSIGN_API_KEY && profile.yousign_procura_id) {
-    const stato = await getStatoFirma(profile.yousign_procura_id);
-
-    if (stato?.stato === "firmata") {
-      // Aggiorna DB
-      await supabase
-        .from("profiles")
-        .update({
-          procura_firmata: true,
-          procura_firmata_il: stato.dataFirma || new Date().toISOString(),
-          procura_url: stato.pdfFirmatoUrl || null,
-        })
-        .eq("id", user.id);
-
-      if (pratica_id) {
-        await supabase
-          .from("pratiche")
-          .update({
-            procura_firmata: true,
-            procura_firmata_il: stato.dataFirma || new Date().toISOString(),
-          })
-          .eq("id", pratica_id);
-      }
-
-      return NextResponse.json({ firmata: true, stato: "firmata" });
-    }
-
-    return NextResponse.json({
-      firmata: false,
-      stato: stato?.stato || "sconosciuto",
-    });
-  }
-
-  return NextResponse.json({ firmata: false, stato: "in_attesa" });
 }

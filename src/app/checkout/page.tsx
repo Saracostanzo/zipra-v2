@@ -1,101 +1,134 @@
-"use client";
+'use client'
+// PATH: src/app/checkout/page.tsx
+//
+// FLUSSO DATI CORRETTO:
+//   URL: /checkout?pratica=UUID_DB&piano=base
+//   → legge praticaDbId (UUID database) e pianoNome ("base")
+//   → manda a /api/stripe/checkout: { pianoId: "base", praticaDbId: "UUID_DB" }
+//   → API crea sessione Stripe con price da pianoId, UUID solo in metadata
+//   → dopo pagamento → /checkout/successo → dashboard
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser'
+import { PIANI } from '@/lib/stripe'
 
-export default function CheckoutPage() {
-  const supabase = createBrowserSupabaseClient();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+const PIANI_ABBONAMENTO = ['base', 'pro', 'mantenimento', 'business', 'business_pro']
 
-  const [praticaId, setPraticaId] = useState<string | null>(null);
-  const [piano, setPiano] = useState<string>("base");
-  const [loading, setLoading] = useState(false);
-  const [errore, setErrore] = useState<string | null>(null);
+function CheckoutContent() {
+  const supabase = createBrowserSupabaseClient()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const [praticaDbId, setPraticaDbId] = useState<string | null>(null)
+  const [pianoNome, setPianoNome] = useState<string>('base')
+  const [loading, setLoading] = useState(false)
+  const [errore, setErrore] = useState<string | null>(null)
+  const [utente, setUtente] = useState<any>(null)
 
   useEffect(() => {
-    const pid = searchParams.get("pratica");
-    const pianoParam = searchParams.get("piano");
+    setPraticaDbId(searchParams.get('pratica'))
+    setPianoNome(searchParams.get('piano') || 'base')
+    // Verifica sessione
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) router.push('/auth/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search))
+      else setUtente(user)
+    })
+  }, [searchParams])
 
-    if (pid) setPraticaId(pid);
-    if (pianoParam) setPiano(pianoParam);
-  }, [searchParams]);
+  const pianoInfo = PIANI[pianoNome as keyof typeof PIANI] ?? null
+  const isAbbonamento = PIANI_ABBONAMENTO.includes(pianoNome)
 
   async function avviaCheckout() {
-    setErrore(null);
-    setLoading(true);
-
+    setErrore(null)
+    setLoading(true)
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      if (!utente) { router.push('/auth/login'); return }
 
-      if (!user) {
-        router.push("/auth/login?redirect=/checkout");
-        return;
-      }
+      // Manda pianoId (per trovare il price Stripe) e praticaDbId (solo metadata)
+      const payload: Record<string, string> = {}
+      if (isAbbonamento) payload.pianoId = pianoNome
+      if (praticaDbId) payload.praticaDbId = praticaDbId
 
-      const body: Record<string, string> = {};
-
-      if (praticaId) body.praticaId = praticaId;
-      if (piano) body.pianoId = piano;
-
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || "Errore checkout");
-      }
-
-      if (!data?.url) {
-        throw new Error("URL checkout non restituito");
-      }
-
-      window.location.href = data.url;
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Errore dal server')
+      if (!data?.url) throw new Error('URL Stripe non ricevuto')
+      window.location.href = data.url
     } catch (err: any) {
-      console.error("Errore checkout:", err);
-      setErrore(err.message || "Errore imprevisto");
+      setErrore(err.message || 'Errore imprevisto')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
   return (
-    <main className="min-h-screen bg-z-darker text-z-light px-6 py-12">
-      <div className="max-w-2xl mx-auto bg-z-mid border border-white/10 p-8">
-        <h1 className="text-3xl font-bold mb-4">Checkout</h1>
+    <div className="min-h-screen bg-z-darker flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
 
-        <div className="space-y-3 mb-6 text-sm text-z-muted">
-          <p>
-            <strong className="text-z-light">Piano:</strong> {piano || "—"}
-          </p>
-          <p>
-            <strong className="text-z-light">Pratica:</strong> {praticaId || "—"}
-          </p>
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <a href="/" className="font-head text-2xl font-bold text-z-light">zipra</a>
         </div>
 
-        {errore && (
-          <div className="mb-4 border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
-            {errore}
-          </div>
-        )}
+        <div className="bg-z-mid border border-white/10 rounded-2xl p-7 shadow-2xl">
+          <h1 className="text-xl font-bold text-z-light mb-1">Completa il pagamento</h1>
+          <p className="text-z-muted text-sm mb-6">
+            Verrai reindirizzato su Stripe — pagamento sicuro e crittografato.
+          </p>
 
-        <button
-          onClick={avviaCheckout}
-          disabled={loading}
-          className="bg-z-green text-z-dark font-bold px-6 py-3 disabled:opacity-50"
-        >
-          {loading ? "Reindirizzamento..." : "Procedi al pagamento"}
-        </button>
+          {/* Riepilogo piano */}
+          {pianoInfo ? (
+            <div className="border border-white/12 rounded-xl p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-z-light">{pianoInfo.nome}</span>
+                <span className="font-bold text-z-green text-lg">€{pianoInfo.importo}</span>
+              </div>
+              <p className="text-z-muted text-xs mt-1">{pianoInfo.descrizione}</p>
+            </div>
+          ) : (
+            <div className="border border-white/12 rounded-xl p-4 mb-6">
+              <p className="text-z-muted text-sm">
+                Piano: <span className="text-z-light font-medium">{pianoNome}</span>
+              </p>
+            </div>
+          )}
+
+          {errore && (
+            <div className="mb-4 border border-red-500/30 bg-red-500/10 rounded-xl p-3 text-sm text-red-300">
+              {errore}
+            </div>
+          )}
+
+          <button
+            onClick={avviaCheckout}
+            disabled={loading || !utente}
+            className="w-full bg-z-green text-z-dark font-bold py-3.5 rounded-xl hover:opacity-90 transition disabled:opacity-50 text-base"
+          >
+            {loading ? 'Reindirizzamento su Stripe...' : 'Procedi al pagamento →'}
+          </button>
+
+          <p className="text-center text-z-muted/40 text-xs mt-4">
+            Pagamento sicuro gestito da Stripe. Zipra non vede i tuoi dati di pagamento.
+          </p>
+        </div>
       </div>
-    </main>
-  );
+    </div>
+  )
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-z-darker flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-z-green/30 border-t-z-green rounded-full animate-spin" />
+      </div>
+    }>
+      <CheckoutContent />
+    </Suspense>
+  )
 }

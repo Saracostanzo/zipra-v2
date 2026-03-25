@@ -1,10 +1,7 @@
 'use client'
-// src/app/onboarding/firma/page.tsx
-// Mostrata dopo il pagamento Stripe
-// Chiede nuova attività vs esistente → avvia firma digitale + procura
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase'
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser'
 import { useRouter } from 'next/navigation'
 import FirmaOnboarding from '@/components/FirmaOnboarding'
 
@@ -21,8 +18,8 @@ export default function OnboardingFirmaPage() {
     const params = new URLSearchParams(window.location.search)
     const pid = params.get('pratica')
     const p = params.get('piano') || 'base'
-    // uid passato nell'URL dalla pagina successo (sopravvive ai redirect)
-    const uidFromUrl = params.get('uid')
+    // Supporta sia 'uid' che 'user_id' nei parametri URL
+    const uidFromUrl = params.get('uid') || params.get('user_id') || sessionStorage.getItem('zipra_user_id')
     setPraticaId(pid)
     setPiano(p)
 
@@ -34,18 +31,15 @@ export default function OnboardingFirmaPage() {
       if (user) {
         uid = user.id
       } else if (uidFromUrl) {
-        // Sessione persa ma abbiamo uid dall'URL — usiamo quello
         uid = uidFromUrl
       } else {
-        // Nessuna sessione e nessun uid — vai al login
         sessionStorage.setItem('zipra_dopo_login', window.location.href)
-        router.push('/auth/signup')
+        router.push('/auth/login')
         return
       }
 
       setUserId(uid)
 
-      // Controlla se ha già firmato
       const { data: profilo } = await supabase
         .from('profiles')
         .select('firma_digitale_autorizzata')
@@ -55,7 +49,7 @@ export default function OnboardingFirmaPage() {
       if (profilo?.firma_digitale_autorizzata) {
         setGiaFirmato(true)
         setTimeout(() => {
-          router.push(`/dashboard?pratica=${pid}&nuova=1`)
+          router.push(pid ? `/dashboard?pratica=${pid}&nuova=1` : '/dashboard')
         }, 2000)
       }
 
@@ -73,40 +67,30 @@ export default function OnboardingFirmaPage() {
   if (giaFirmato) return (
     <div className="min-h-screen bg-z-darker flex items-center justify-center px-4">
       <div className="text-center max-w-sm">
-        <div className="text-5xl mb-4">✅</div>
-        <h2 className="font-bold text-z-light text-xl mb-2">Hai già firmato</h2>
-        <p className="text-z-muted text-sm">Procura speciale già presente — ti portiamo subito alla dashboard.</p>
+        <div className="text-5xl mb-4">&#10003;</div>
+        <h2 className="font-bold text-z-light text-xl mb-2">Hai gia firmato!</h2>
+        <p className="text-z-muted text-sm">Reindirizzamento alla dashboard...</p>
       </div>
     </div>
   )
 
+  if (!userId) return null
+
   return (
-    <div className="min-h-screen bg-z-darker flex items-center justify-center px-4 py-10">
+    <div className="min-h-screen bg-z-darker flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-
         <div className="text-center mb-8">
-          <a href="/" className="font-head text-2xl font-bold text-z-light">zipra ⚡</a>
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <span className="text-z-green text-sm">✓ Pagamento completato</span>
-            <span className="text-z-muted/30">→</span>
-            <span className="text-z-light text-sm font-bold">Firma documenti</span>
-          </div>
+          <a href="/" className="font-head text-2xl font-bold text-z-light">zipra</a>
+          <p className="text-z-muted text-sm mt-1">Ultimo passaggio — firma i documenti</p>
         </div>
-
-        <div className="bg-z-mid border border-white/8 rounded-2xl p-6">
-          {userId && praticaId && (
-            <FirmaOnboarding
-              praticaId={praticaId}
-              userId={userId}
-              piano={piano}
-              onComplete={() => router.push(`/dashboard?pratica=${praticaId}&nuova=1`)}
-            />
-          )}
-        </div>
-
-        <p className="text-center text-xs text-z-muted/30 mt-4">
-          La procura è valida per tutte le pratiche future — non dovrai firmare di nuovo.
-        </p>
+        <FirmaOnboarding
+          praticaId={praticaId ?? ''}
+          userId={userId}
+          piano={piano}
+          onComplete={() => {
+            router.push(praticaId ? `/dashboard?pratica=${praticaId}&nuova=1` : '/dashboard')
+          }}
+        />
       </div>
     </div>
   )

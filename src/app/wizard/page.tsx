@@ -604,6 +604,61 @@ export default function WizardPage() {
       descrizione: 'Schede tecniche dei prodotti che utilizzi. Le fornisce il produttore o distributore.',
       comeOttenere: 'Richiedi le schede al fornitore dei prodotti o scaricale dal sito del produttore.',
     }
+    // Dichiarazione inizio attività → Zipra la compila
+    if (n.includes('dichiarazione') && (n.includes('inizio') || n.includes('attività') || n.includes('avvio'))) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra compila e invia la dichiarazione di inizio attività all\'ente competente.',
+      datiNecessari: ['Codice ATECO', 'Dati impresa', 'Sede'],
+    }
+ 
+    // SCIA → Zipra
+    if (n.includes('scia') || n.includes('segnalazione certificata')) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra prepara e invia la SCIA al SUAP del Comune.',
+      datiNecessari: ['Dati impresa', 'Indirizzo sede'],
+    }
+ 
+    // Comunicazione al Registro Imprese → Zipra
+    if (n.includes('comunica') || n.includes('registro imprese') || n.includes('camera di commercio') || n.includes('cciaa')) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra invia la pratica al Registro delle Imprese tramite ComUnica.',
+      datiNecessari: ['Dati anagrafici', 'Codice ATECO'],
+    }
+ 
+    // Modello AA9 / apertura P.IVA → Zipra
+    if (n.includes('partita iva') || n.includes('modello aa') || n.includes('apertura p.iva') || n.includes('agenzia entrate')) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra apre la Partita IVA all\'Agenzia delle Entrate con il modello AA9.',
+      datiNecessari: ['Codice fiscale', 'Codice ATECO'],
+    }
+ 
+    // Iscrizione INPS → Zipra
+    if (n.includes('inps') || n.includes('iscrizione previdenziale') || n.includes('gestione separata') || n.includes('artigiani') || n.includes('commercianti')) return {
+      fonte: 'zipra_api', zipraLoCompila: true,
+      descrizione: 'Zipra gestisce l\'iscrizione previdenziale INPS.',
+      datiNecessari: ['Codice fiscale'],
+    }
+ 
+    // Notifica sanitaria / ASL → Zipra
+    if (n.includes('notifica sanitaria') || n.includes('asl') || n.includes('ats') || n.includes('igiene')) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra invia la notifica sanitaria all\'ASL/ATS competente.',
+      datiNecessari: ['Dati impresa', 'Indirizzo sede', 'Piano HACCP'],
+    }
+ 
+    // Requisiti morali / autocertificazione → Zipra
+    if (n.includes('requisiti morali') || n.includes('antimafia') || n.includes('autocertificazione') || n.includes('dichiarazione sostitutiva')) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra compila l\'autocertificazione dei requisiti morali e la invia all\'ente.',
+      datiNecessari: ['Dati anagrafici', 'Codice fiscale'],
+    }
+ 
+    // Codice fiscale impresa → Zipra
+    if (n.includes('codice fiscale') && (n.includes('impresa') || n.includes('società') || n.includes('ditta'))) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra ottiene il codice fiscale dell\'impresa dall\'Agenzia delle Entrate.',
+      datiNecessari: ['Dati impresa'],
+    }
 
     // Default: l'utente porta il documento ma con info su come ottenerlo
     return {
@@ -727,18 +782,27 @@ export default function WizardPage() {
         visti.add(nLower)
 
         // Salta tutto ciò che fa Zipra o è già coperto — MAI mostrarlo come compito utente
-        const gestisceZipra = [
-          'pec', 'posta elettronica certificata',
-          'casellario', 'certificato penale', 'carichi pendenti',
-          'estratto contributivo', 'estratto inps',
-          'durc', 'documento unico di regolarità',
-          'visura camerale', 'visura catastale',
-          'comunica', 'codice fiscale', 'tesserino fiscale',
-          'certificato di residenza', 'autocertificazione',
-          'dichiarazione sostitutiva', 'requisiti morali',
-          'documento di identità', "carta d'identità",
-          'scia ',
-        ]
+const gestisceZipra = [
+      'pec', 'posta elettronica certificata',
+      'casellario', 'certificato penale', 'carichi pendenti',
+      'estratto contributivo', 'estratto inps',
+      'durc', 'documento unico di regolarità',
+      'visura camerale', 'visura catastale',
+      'comunica', 'codice fiscale', 'tesserino fiscale',
+      'certificato di residenza', 'autocertificazione',
+      'dichiarazione sostitutiva', 'requisiti morali',
+      "documento di identità", "carta d'identità",
+      'scia', 'suap', 'partita iva', 'apertura p.iva',
+      'modello aa', 'agenzia entrate',
+      'firma digitale', 'firma digitale attiva', 'procura',
+      'procura speciale', 'procura digitale',
+      'iban', 'coordinate bancarie',
+      'inps', 'iscrizione previdenziale',
+      'dichiarazione inizio', 'dichiarazione avvio', 'dichiarazione attività',
+      'notifica sanitaria', 'asl', 'ats',
+      'registro imprese', 'camera di commercio', 'cciaa',
+      'antimafia', 'camera commercio',
+    ]
         if (
           nomiFissi.has(nLower) ||
           gestisceZipra.some(k => nLower.includes(k)) ||
@@ -912,7 +976,9 @@ export default function WizardPage() {
         .filter(doc => (doc.stato === 'skippato' || doc.stato === 'non_caricato') && doc.obbligatorio && doc.fonte === 'utente')
         .map(doc => ({ id: doc.id, nome: doc.nome }))
 
-      const tipoAttivita = d.idea?.trim() || 'Nuova attività'
+      const tipoAttivita = analisi?.descrizione_ateco
+  ? `${d.forma_giuridica === 'srl' || d.forma_giuridica === 'srls' ? 'Costituzione' : 'Apertura'} — ${analisi.descrizione_ateco}`
+  : (d.idea || 'Nuova attività').replace(/^(voglio|vorrei|apro|aprire|creare)\s+/i, '').replace(/^un[ao]?\s+/i, '').trim() || 'Nuova attività'
       const formaGiuridica = d.forma_giuridica?.trim() || 'ditta_individuale'
       const nomeImpresa = d.nome_impresa?.trim() || d.idea?.trim() || 'Nuova impresa'
       const comuneSede = d.comune_sede?.trim() || 'Da definire'
@@ -976,24 +1042,20 @@ export default function WizardPage() {
     ? Math.round((docPronti.length / documenti.length) * 100)
     : 0
 
-  // ── Loading AI ─────────────────────────────────────────
-  if (loading && step === 5) return (
+  if (loading) return (
     <div className="min-h-screen bg-z-darker flex items-center justify-center px-4">
       <div className="text-center max-w-sm">
         <div className="w-16 h-16 border-2 border-z-green/30 border-t-z-green rounded-full animate-spin mx-auto mb-6" />
-        <h2 className="font-head font-bold text-2xl text-z-light mb-2">Analizzo la tua impresa...</h2>
-        <p className="text-z-muted text-sm">Identifico le pratiche necessarie e i documenti richiesti per {dati.comune_sede}.</p>
-      </div>
-    </div>
-  )
-
-  // ── Loading finale ────────────────────────────────────
-  if (loading && step === 6) return (
-    <div className="min-h-screen bg-z-darker flex items-center justify-center px-4">
-      <div className="text-center max-w-sm">
-        <div className="w-16 h-16 border-2 border-z-green/30 border-t-z-green rounded-full animate-spin mx-auto mb-6" />
-        <h2 className="font-head font-bold text-2xl text-z-light mb-2">Creo la tua pratica...</h2>
-        <p className="text-z-muted text-sm">Carico i documenti e preparo tutto per l'invio.</p>
+        <h2 className="font-head font-bold text-2xl text-z-light mb-2">
+          {step >= 6 ? 'Creo la tua pratica...' : 'Analizzo la tua impresa...'}
+        </h2>
+        <p className="text-z-muted text-sm">
+          {step >= 6
+            ? 'Carico i documenti e preparo tutto per l\'invio.'
+            : `Identifico le pratiche necessarie per ${dati.comune_sede || 'il tuo comune'}.`
+          }
+        </p>
+        <p className="text-z-muted/40 text-xs mt-4">Ci vogliono circa 10-20 secondi...</p>
       </div>
     </div>
   )

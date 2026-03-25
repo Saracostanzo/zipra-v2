@@ -10,6 +10,7 @@ export type DocumentoStep = {
 };
 
 const TITLE_ALIASES: Record<string, string> = {
+  // Documento identità
   "documento di identita": "documento_identita",
   "documento identita": "documento_identita",
   "documento identità": "documento_identita",
@@ -21,20 +22,33 @@ const TITLE_ALIASES: Record<string, string> = {
   "passaporto": "documento_identita",
   "patente": "documento_identita",
 
+  // PEC
   "pec": "pec",
   "posta elettronica certificata": "pec",
 
+  // Procura — TUTTO gestito da Zipra, il cliente firma solo via OTP sul telefono
   "procura digitale": "procura_digitale",
+  "procura speciale": "procura_digitale",
+  "procura speciale digitale": "procura_digitale",
+  "firma digitale": "procura_digitale",
+  "firma digitale attiva": "procura_digitale",
+  "firma digitale per procure": "procura_digitale",
+  "firma digitale attiva per procure e pratiche telematiche": "procura_digitale",
   "modello procura digitale": "procura_digitale",
   "modello procura digitale utilizzato con clienti per verifica legale": "procura_digitale",
+  "modello procura tipo da utilizzare con i clienti": "procura_digitale",
 
+  // Titolo di studio
   "titolo di studio": "titolo_studio",
   "attestazioni competenze informatiche": "titolo_studio",
   "titolo di studio o attestazioni competenze informatiche": "titolo_studio",
 
+  // IBAN — Zipra raccoglie l'IBAN direttamente nel profilo, non serve documento
   "iban": "iban",
   "coordinate bancarie iban": "iban",
   "coordinate bancarie iban per addebiti f24": "iban",
+  "iban per addebiti": "iban",
+  "iban per addebiti accrediti": "iban",
 };
 
 const DOCUMENTO_CANONICO: Record<
@@ -48,6 +62,7 @@ const DOCUMENTO_CANONICO: Record<
     obbligatorio: true,
     comeOttenerlo: "Carica un documento di identità valido e leggibile, fronte/retro se necessario.",
   },
+
   pec: {
     titolo: "PEC (Posta Elettronica Certificata)",
     descrizione: "Zipra attiva e registra la PEC a nome della tua impresa — non devi fare nulla.",
@@ -55,13 +70,19 @@ const DOCUMENTO_CANONICO: Record<
     obbligatorio: true,
     comeOttenerlo: "Ci serviranno i dati anagrafici e dell'impresa per l'attivazione.",
   },
+
+  // FIX: la procura NON è un documento che il cliente deve avere o caricare.
+  // Zipra opera con procura speciale firmata digitalmente via OTP SMS (Yousign).
+  // Il cliente riceve un'email, clicca il link, firma in 30 secondi con il telefono.
+  // Non serve nessuna firma digitale personale del cliente.
   procura_digitale: {
-    titolo: "Procura speciale digitale",
-    descrizione: "Zipra compila il modulo ufficiale con i tuoi dati e lo invia per la firma digitale.",
+    titolo: "Procura speciale Zipra",
+    descrizione: "Zipra prepara la procura e te la invia via email. La firmi in 30 secondi con un codice SMS — nessuna firma digitale personale richiesta.",
     tipoCompilazione: "zipra",
     obbligatorio: true,
-    comeOttenerlo: "La riceverai via email per la firma digitale dopo il pagamento.",
+    comeOttenerlo: "Ricevi l'email dopo il pagamento — firmi dal telefono con OTP SMS.",
   },
+
   titolo_studio: {
     titolo: "Titolo di studio o attestazioni competenze",
     descrizione: "Diploma, laurea o attestato di qualifica professionale, se richiesto per l'attività.",
@@ -69,12 +90,15 @@ const DOCUMENTO_CANONICO: Record<
     obbligatorio: true,
     comeOttenerlo: "Carica il documento più rilevante per la tua attività regolamentata.",
   },
+
+  // FIX: l'IBAN non è un documento da caricare — lo raccogliamo nel profilo utente
+  // durante l'onboarding o dalla dashboard. Non serve un file allegato.
   iban: {
-    titolo: "Coordinate bancarie IBAN",
-    descrizione: "IBAN intestato o cointestato utile per eventuali addebiti o pratiche collegate.",
-    tipoCompilazione: "upload",
-    obbligatorio: true,
-    comeOttenerlo: "Puoi caricare un documento bancario o inserire l'IBAN quando richiesto.",
+    titolo: "IBAN per pratiche INPS/F24",
+    descrizione: "Zipra raccoglie il tuo IBAN direttamente nel profilo — non devi allegare nessun documento.",
+    tipoCompilazione: "zipra",
+    obbligatorio: false,
+    comeOttenerlo: "Inserisci l'IBAN nella sezione Profilo della dashboard quando richiesto.",
   },
 };
 
@@ -95,9 +119,7 @@ function canonicalCodeFromTitle(title: string): string {
 
 function isGarbageDescription(description?: string): boolean {
   const d = normalizeText(description);
-
   if (!d) return false;
-
   const blacklist = [
     "ho fatto un sito",
     "disbrigo pratiche",
@@ -108,7 +130,6 @@ function isGarbageDescription(description?: string): boolean {
     "sia dal cliente",
     "commercialisti e caf a lecce",
   ];
-
   return blacklist.some((bad) => d.includes(bad));
 }
 
