@@ -1,38 +1,21 @@
-/**
- * YOUSIGN v3 — Integrazione completa firma digitale e deleghe
- *
- * Flusso corretto v3:
- *   1. POST /signature_requests                        → crea la richiesta (senza documenti)
- *   2. POST /signature_requests/:id/documents          → carica PDF (NON /documents standalone)
- *   3. POST /signature_requests/:id/signatories        → aggiungi firmatario
- *   4. POST /signature_requests/:id/signature_fields   → campo firma visivo
- *   5. POST /signature_requests/:id/activate           → invia email al cliente
- *   6. GET  /signature_requests/:id/signatories/:sid   → ottieni link firma
- *
- * API docs: https://developers.yousign.com/reference
- * Sandbox:  https://staging-api.yousign.app/v3
- * Prod:     https://api.yousign.app/v3
- */
+// PATH: src/lib/yousign/index.ts
 
 const BASE =
   process.env.YOUSIGN_SANDBOX === 'true'
-    ? 'https://staging-api.yousign.app/v3'
+    ? 'https://api-sandbox.yousign.app/v3'
     : 'https://api.yousign.app/v3'
 
-// Header JSON — NON usato per le chiamate multipart (FormData gestisce Content-Type da solo)
 const H = (): Record<string, string> => ({
   Authorization: `Bearer ${process.env.YOUSIGN_API_KEY!}`,
   'Content-Type': 'application/json',
 })
-
-// ─── Tipi ─────────────────────────────────────────────────────────────────────
 
 export interface YousignSigner {
   info: {
     first_name: string
     last_name: string
     email: string
-    phone_number: string // formato +39XXXXXXXXXX
+    phone_number: string
     locale: 'it'
   }
   signature_level:
@@ -40,10 +23,6 @@ export interface YousignSigner {
     | 'advanced_electronic_signature'
     | 'qualified_electronic_signature'
   signature_authentication_mode: 'otp_sms' | 'otp_email' | 'no_otp'
-  redirect_urls?: {
-    success?: string
-    error?: string
-  }
 }
 
 export interface SignatureRequest {
@@ -53,8 +32,6 @@ export interface SignatureRequest {
   documents: { id: string }[]
   audit_trail_locale: string
 }
-
-// ─── 1. Crea richiesta di firma ────────────────────────────────────────────────
 
 export async function creaRichiestaDiFirma({
   nome,
@@ -66,7 +43,7 @@ export async function creaRichiestaDiFirma({
   tipoFirma = 'advanced_electronic_signature',
   campiDaFirmare,
   externalId,
-  redirectSuccesso,
+  redirectSuccesso, // ignorato in trial, mantenuto per compatibilità
 }: {
   nome: string
   cognome: string
@@ -80,7 +57,7 @@ export async function creaRichiestaDiFirma({
   redirectSuccesso?: string
 }): Promise<{ requestId: string; signerId: string; signLink: string } | null> {
   try {
-    // ── Step 1: Crea la signature request (SENZA documenti — si aggiungono dopo) ──
+    // ── Step 1: Crea la signature request ──────────────────────────────────
     const requestRes = await fetch(`${BASE}/signature_requests`, {
       method: 'POST',
       headers: H(),
@@ -90,19 +67,6 @@ export async function creaRichiestaDiFirma({
         timezone: 'Europe/Rome',
         audit_trail_locale: 'it',
         ...(externalId ? { external_id: externalId } : {}),
-        email_notification: {
-          sender: {
-            name: 'Zipra',
-            email: 'notifiche@zipra.it',
-          },
-          signers: [
-            {
-              request_subject: 'Firma richiesta — Zipra',
-              request_body: `Gentile ${nome},\n\nCi siamo quasi! Per completare l'apertura della tua impresa con Zipra, ti chiediamo di firmare digitalmente questo documento. Bastano 30 secondi.\n\nClicca il bottone qui sotto per firmare.\n\nTeam Zipra`,
-              signed_notification: true,
-            },
-          ],
-        },
       }),
     })
 
@@ -113,8 +77,7 @@ export async function creaRichiestaDiFirma({
     const { id: requestId } = await requestRes.json()
     console.log('[Yousign] Signature request creata:', requestId)
 
-    // ── Step 2: Carica il documento PDF sotto la signature request ──────────────
-    // IMPORTANTE: NON impostare Content-Type — FormData lo imposta da solo con il boundary
+    // ── Step 2: Carica il documento PDF ────────────────────────────────────
     const formData = new FormData()
     const arrayBuffer = pdfBuffer.buffer.slice(
       pdfBuffer.byteOffset,
@@ -129,10 +92,7 @@ export async function creaRichiestaDiFirma({
 
     const uploadRes = await fetch(`${BASE}/signature_requests/${requestId}/documents`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.YOUSIGN_API_KEY!}`,
-        // NON aggiungere Content-Type qui — FormData lo gestisce autonomamente
-      },
+      headers: { Authorization: `Bearer ${process.env.YOUSIGN_API_KEY!}` },
       body: formData,
     })
 
@@ -143,8 +103,8 @@ export async function creaRichiestaDiFirma({
     const { id: documentId } = await uploadRes.json()
     console.log('[Yousign] Documento caricato:', documentId)
 
-    // ── Step 3: Aggiungi il firmatario ──────────────────────────────────────────
-    const signerRes = await fetch(`${BASE}/signature_requests/${requestId}/signatories`, {
+    // ── Step 3: Aggiungi il firmatario ──────────────────────────────────────
+    const signerRes = await fetch(`${BASE}/signature_requests/${requestId}/signers`, {
       method: 'POST',
       headers: H(),
       body: JSON.stringify({
@@ -157,25 +117,19 @@ export async function creaRichiestaDiFirma({
         },
         signature_level: tipoFirma,
         signature_authentication_mode: 'otp_sms',
-        ...(redirectSuccesso
-          ? {
-              redirect_urls: {
-                success: redirectSuccesso,
-                error: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?firma=errore`,
-              },
-            }
-          : {}),
+        // redirect_urls non permesso in trial Yousign
       }),
     })
 
     if (!signerRes.ok) {
-      console.error('Yousign add signatory error:', signerRes.status, await signerRes.text())
+      console.error('Yousign add signer error:', signerRes.status, await signerRes.text())
       return null
     }
     const { id: signerId } = await signerRes.json()
     console.log('[Yousign] Firmatario aggiunto:', signerId)
 
-    // ── Step 4: Aggiungi campo firma visivo ─────────────────────────────────────
+    // ── Step 4: Aggiungi campo firma visivo ─────────────────────────────────
+    // ENDPOINT CORRETTO: /documents/:docId/fields  (non /signature_fields)
     const campo = campiDaFirmare?.[0] ?? {
       pagina: 1,
       x: 50,
@@ -184,27 +138,30 @@ export async function creaRichiestaDiFirma({
       altezza: 50,
     }
 
-    const fieldsRes = await fetch(`${BASE}/signature_requests/${requestId}/signature_fields`, {
-      method: 'POST',
-      headers: H(),
-      body: JSON.stringify({
-        document_id: documentId,
-        signatory_id: signerId,
-        type: 'signature',
-        page: campo.pagina,
-        x: campo.x,
-        y: campo.y,
-        width: campo.larghezza,
-        height: campo.altezza,
-      }),
-    })
+    const fieldsRes = await fetch(
+      `${BASE}/signature_requests/${requestId}/documents/${documentId}/fields`,
+      {
+        method: 'POST',
+        headers: H(),
+        body: JSON.stringify({
+          signer_id: signerId,
+          type: 'signature',
+          page: campo.pagina,
+          x: campo.x,
+          y: campo.y,
+          width: campo.larghezza,
+          height: campo.altezza,
+        }),
+      }
+    )
 
     if (!fieldsRes.ok) {
-      // Non bloccante — il campo firma è visivo, la firma funziona comunque
       console.warn('Yousign add field warning:', fieldsRes.status, await fieldsRes.text())
+    } else {
+      console.log('[Yousign] Campo firma aggiunto')
     }
 
-    // ── Step 5: Attiva (invia email al cliente) ─────────────────────────────────
+    // ── Step 5: Attiva — invia email al cliente ─────────────────────────────
     const activateRes = await fetch(`${BASE}/signature_requests/${requestId}/activate`, {
       method: 'POST',
       headers: H(),
@@ -216,12 +173,13 @@ export async function creaRichiestaDiFirma({
     }
     console.log('[Yousign] Richiesta attivata, email inviata a', email)
 
-    // ── Step 6: Recupera il link di firma ───────────────────────────────────────
+    // ── Step 6: Recupera il link di firma ───────────────────────────────────
     const signerDetailRes = await fetch(
-      `${BASE}/signature_requests/${requestId}/signatories/${signerId}`,
+      `${BASE}/signature_requests/${requestId}/signers/${signerId}`,
       { headers: H() }
     )
     const signerDetail = signerDetailRes.ok ? await signerDetailRes.json() : {}
+    console.log('[Yousign] Link firma:', signerDetail.signature_link ?? 'non disponibile')
 
     return {
       requestId,
@@ -233,8 +191,6 @@ export async function creaRichiestaDiFirma({
     return null
   }
 }
-
-// ─── 2. Controlla stato firma ──────────────────────────────────────────────────
 
 export async function getStatoFirma(requestId: string): Promise<{
   stato: 'in_attesa' | 'firmata' | 'scaduta' | 'errore'
@@ -265,9 +221,10 @@ export async function getStatoFirma(requestId: string): Promise<{
   }
 }
 
-// ─── 3. Scarica PDF firmato ────────────────────────────────────────────────────
-
-export async function scaricaPDFFirmato(requestId: string, documentId: string): Promise<Buffer | null> {
+export async function scaricaPDFFirmato(
+  requestId: string,
+  documentId: string
+): Promise<Buffer | null> {
   try {
     const res = await fetch(
       `${BASE}/signature_requests/${requestId}/documents/${documentId}/download`,
@@ -280,15 +237,6 @@ export async function scaricaPDFFirmato(requestId: string, documentId: string): 
     return null
   }
 }
-
-// ─── 4. Webhook parser ────────────────────────────────────────────────────────
-//
-// Gli event_type corretti in v3:
-//   'signature_request.done'      → tutta la richiesta completata (evento principale)
-//   'signature_request.declined'  → firmatario ha rifiutato
-//   'signature_request.expired'   → scaduta
-//   'signer.done'                 → singolo firmatario ha firmato (con più firmatari)
-//   'signer.notified'             → email inviata al firmatario
 
 export function parseYousignWebhook(body: unknown): {
   tipo: 'firmata' | 'rifiutata' | 'visualizzata' | 'scaduta' | 'altro'
