@@ -31,9 +31,9 @@ export async function POST(req: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session;
     const meta = session.metadata ?? {};
 
-    const userId     = meta.userId;
-    const pianoId    = meta.pianoId || null;
-    const praticaDbId = meta.praticaDbId || null;  // UUID database pratica
+    const userId      = meta.userId;
+    const pianoId     = meta.pianoId || null;
+    const praticaDbId = meta.praticaDbId || null;
 
     console.log("[Stripe webhook] checkout.session.completed", { userId, pianoId, praticaDbId });
 
@@ -52,20 +52,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── Aggiorna piano ─────────────────────────────────────────────────────
-    if (pianoId) {
+    // ── Aggiorna piano profilo (solo abbonamenti) ──────────────────────────
+    if (pianoId && pianoId !== "singola") {
       await supabase.from("profiles")
         .update({ piano: pianoId, updated_at: new Date().toISOString() })
         .eq("id", userId);
     }
 
-    // ── Aggiorna pratica → "pagata" ────────────────────────────────────────
+    // ── Aggiorna pratica → "pagata" + salva piano reale pagato ────────────
     if (praticaDbId) {
       await supabase.from("pratiche").update({
         pagato: true,
         pagato_at: new Date().toISOString(),
         stripe_session_id: session.id,
         stato: "pagata",
+        piano: pianoId ?? "singola",  // salva il piano reale — non il default "base" del wizard
       }).eq("id", praticaDbId);
     }
 
@@ -75,29 +76,36 @@ export async function POST(req: NextRequest) {
 
     if (!profilo?.firma_digitale_autorizzata) {
       if (!profilo?.telefono) {
-        // Telefono mancante → crea todo admin invece di far crashare
         console.warn("[Stripe webhook] Telefono mancante per", userId);
-        await supabase.from("todo_admin").insert({
-          tipo: "procura_firma_manuale",
-          priorita: "altissima",
-          descrizione: `Utente ${userId} ha pagato ma manca il telefono nel profilo. Invia procura manualmente.`,
-          istruzioni: JSON.stringify([
-            "1. Contatta l'utente e chiedigli di aggiungere il numero di telefono nel profilo",
-            "2. Vai su /admin e usa 'Reinvia procura' dopo che ha aggiunto il telefono",
-          ]),
-          pratica_id: praticaDbId,
-        });
-        // Aggiorna stato a in_revisione_admin così la pratica non resta "pagata"
+        try {
+          await supabase.from("todo_admin").insert({
+            tipo: "procura_firma_manuale",
+            priorita: "altissima",
+            descrizione: `Utente ${userId} ha pagato ma manca il telefono nel profilo. Invia procura manualmente.`,
+            istruzioni: JSON.stringify([
+              "1. Contatta l'utente e chiedigli di aggiungere il numero di telefono nel profilo",
+              "2. Vai su /admin e usa 'Reinvia procura' dopo che ha aggiunto il telefono",
+            ]),
+            pratica_id: praticaDbId,
+          });
+        } catch {}
         if (praticaDbId) {
           await supabase.from("pratiche").update({ stato: "in_revisione_admin" }).eq("id", praticaDbId);
         }
       } else {
+        // Calcola importo corretto in base al piano reale
+        const importo = pianoId === "pro" ? 249
+          : pianoId === "business_pro" ? 299
+          : pianoId === "business" ? 199
+          : pianoId === "base" ? 149
+          : 199  // singola default
+
         try {
           await avviaOnboardingFirma({
             userId,
             praticaId: praticaDbId ?? undefined,
-            piano: pianoId ?? "base",
-            importo: pianoId === "pro" ? 249 : pianoId === "business" ? 199 : pianoId === "business_pro" ? 299 : 149,
+            piano: pianoId ?? "singola",
+            importo,
           });
           if (praticaDbId) {
             await supabase.from("pratiche").update({ stato: "firma_inviata" }).eq("id", praticaDbId);
@@ -105,17 +113,19 @@ export async function POST(req: NextRequest) {
           console.log("[Stripe webhook] Firma avviata per", userId);
         } catch (err: any) {
           console.error("[Stripe webhook] Errore avvio firma:", err.message);
-          await supabase.from("todo_admin").insert({
-            tipo: "procura_firma_manuale",
-            priorita: "altissima",
-            descrizione: `Errore avvio firma per userId=${userId}: ${err.message}`,
-            istruzioni: JSON.stringify([
-              "1. Verifica YOUSIGN_API_KEY su Vercel",
-              "2. Verifica telefono nel profilo utente",
-              "3. Usa 'Reinvia procura' dall'admin panel",
-            ]),
-            pratica_id: praticaDbId,
-          });
+          try {
+            await supabase.from("todo_admin").insert({
+              tipo: "procura_firma_manuale",
+              priorita: "altissima",
+              descrizione: `Errore avvio firma per userId=${userId}: ${err.message}`,
+              istruzioni: JSON.stringify([
+                "1. Verifica YOUSIGN_API_KEY su Vercel",
+                "2. Verifica telefono nel profilo utente",
+                "3. Usa 'Reinvia procura' dall'admin panel",
+              ]),
+              pratica_id: praticaDbId,
+            });
+          } catch {}
           if (praticaDbId) {
             await supabase.from("pratiche").update({ stato: "in_revisione_admin" }).eq("id", praticaDbId);
           }

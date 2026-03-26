@@ -149,7 +149,6 @@ function PannelloDettaglioPratica({
     } finally { setUploading(null) }
   }
 
-  // FIX 1 — Invia in revisione
   const handleInviaRevisione = async () => {
     setInviando(true)
     setErroreInvio(null)
@@ -167,7 +166,7 @@ function PannelloDettaglioPratica({
     } finally { setInviando(false) }
   }
 
-  // FIX 2 — Prezzo corretto: singola vs abbonamento
+  // Prezzo corretto: singola vs abbonamento
   const renderPrezzo = () => {
     const isAbbonamento = PIANI_ABBONAMENTO.includes(pratica.piano)
     if (!isAbbonamento) {
@@ -194,7 +193,14 @@ function PannelloDettaglioPratica({
     )
   }
 
-  const puoInviareRevisione = ['pagata', 'firma_inviata'].includes(pratica.stato)
+  // Documenti ancora mancanti (non caricati in questa sessione)
+  const documentiAncoraScoperti = docDaCaricare.filter(
+    (doc: any) => !uploadOk.has(doc.id ?? doc.nome)
+  )
+
+  const statoAbilitaRevisione = ['pagata', 'firma_inviata'].includes(pratica.stato)
+  // Il bottone è attivo SOLO se: stato corretto E tutti i documenti caricati
+  const puoInviareRevisione = statoAbilitaRevisione && documentiAncoraScoperti.length === 0
 
   return (
     <div className="border-t border-white/8 bg-z-darker">
@@ -250,7 +256,7 @@ function PannelloDettaglioPratica({
           </div>
         </div>
 
-        {/* COLONNA DX — documenti + prezzo + invio revisione */}
+        {/* COLONNA DX — documenti + prezzo + invio */}
         <div>
           <div className="text-xs font-mono text-blue-400/60 uppercase tracking-wider mb-3">📎 Documenti da caricare</div>
           {docDaCaricare.length === 0 ? (
@@ -292,7 +298,7 @@ function PannelloDettaglioPratica({
             </div>
           )}
 
-          {/* FIX 2: prezzo corretto */}
+          {/* Prezzo corretto */}
           <div className="flex gap-3 mt-4">
             <div className="flex-1 bg-z-mid rounded-xl p-3 text-center">
               {renderPrezzo()}
@@ -305,7 +311,24 @@ function PannelloDettaglioPratica({
             )}
           </div>
 
-          {/* FIX 1: bottone invia in revisione — appare solo per pagata/firma_inviata */}
+          {/* Avviso documenti mancanti */}
+          {statoAbilitaRevisione && documentiAncoraScoperti.length > 0 && (
+            <div className="mt-3 p-3 bg-amber-400/8 border border-amber-400/20 rounded-xl">
+              <p className="text-xs text-amber-400 font-bold mb-1">
+                ⚠️ Mancano ancora {documentiAncoraScoperti.length} document{documentiAncoraScoperti.length === 1 ? 'o' : 'i'}
+              </p>
+              <p className="text-xs text-amber-400/70">
+                Carica tutti i documenti richiesti per poter inviare la pratica in revisione.
+              </p>
+              <ul className="mt-1.5 space-y-0.5">
+                {documentiAncoraScoperti.map((doc: any) => (
+                  <li key={doc.id ?? doc.nome} className="text-xs text-amber-400/60">• {doc.nome}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Bottone invia in revisione — solo se stato corretto E documenti tutti caricati */}
           {puoInviareRevisione && (
             <div className="mt-3">
               <button
@@ -379,7 +402,6 @@ export default function DashboardPage() {
     }
   }
 
-  // FIX 3 — Verifica firma su Yousign, aggiorna DB, fa sparire il banner automaticamente
   const verificaFirma = async () => {
     if (!profilo?.id) return
     setVerificandoFirma(true)
@@ -487,7 +509,7 @@ export default function DashboardPage() {
           <a href="/wizard" className="btn-primary">+ Nuova pratica</a>
         </div>
 
-        {/* FIX 3: Banner firma con "Ho già firmato — verifica" */}
+        {/* Banner firma con "Ho già firmato — verifica" */}
         {pratiche.length > 0 && !profilo?.firma_digitale_autorizzata && (
           <div className="bg-amber-400/8 border border-amber-400/20 rounded-2xl px-5 py-4 flex items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
