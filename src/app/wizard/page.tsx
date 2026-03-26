@@ -1,4 +1,6 @@
 'use client'
+// PATH: src/app/wizard/page.tsx
+
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
@@ -20,13 +22,10 @@ function ComuneAutocomplete({
   const ref = useRef<HTMLDivElement>(null)
   const inizializzato = useRef(false)
 
-  // Sincronizza se arriva un valore pre-impostato (es. dal chatbot)
-  // Usa ref per triggerare anche al mount, non solo al cambio
   useEffect(() => {
     if (!value) return
     if (inizializzato.current && value === selezionato?.nome) return
     inizializzato.current = true
-
     setQuery(value)
     const trovato = trovaComuneEsatto(value)
     if (trovato) {
@@ -35,7 +34,6 @@ function ComuneAutocomplete({
     } else {
       const risultatiParziali = cercaComuni(value)
       if (risultatiParziali.length >= 1) {
-        // Prendi il primo match (es. "Lecce" → Lecce LE)
         const primo = risultatiParziali[0]
         setSelezionato(primo)
         setQuery(primo.nome)
@@ -44,7 +42,6 @@ function ComuneAutocomplete({
     }
   }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Chiudi dropdown se click fuori
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setAperto(false)
@@ -63,7 +60,6 @@ function ComuneAutocomplete({
       setRisultati([])
       setAperto(false)
     }
-    // Aggiorna comunque il valore nel form (anche parziale)
     onChange(v, '', '')
   }
 
@@ -86,8 +82,6 @@ function ComuneAutocomplete({
         className="input-field"
         autoComplete="off"
       />
-
-      {/* Dropdown risultati */}
       {aperto && risultati.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-z-card border border-white/15 rounded-xl shadow-2xl z-50 overflow-hidden">
           {risultati.map(c => (
@@ -108,8 +102,6 @@ function ComuneAutocomplete({
           ))}
         </div>
       )}
-
-      {/* Chip del comune selezionato con provincia e CAP */}
       {selezionato && (
         <div className="flex items-center gap-3 mt-2">
           <div className="flex items-center gap-2 bg-z-green/10 border border-z-green/25 rounded-full px-3 py-1.5">
@@ -145,23 +137,31 @@ interface DocumentoWizard {
   datiNecessari?: string[]
 }
 
+// ── FIX 1: DatiWizard con tutti i campi anagrafici ─────────────────────────
 type DatiWizard = {
   idea: string; settore: string; forma_giuridica: string
   nome_impresa: string; comune_sede: string; provincia_sede: string
   ha_locale: boolean; serve_alimenti: boolean
-  nome: string; cognome: string; codice_fiscale: string; email: string; telefono: string
+  nome: string; cognome: string; codice_fiscale: string
+  email: string; telefono: string
+  data_nascita: string; luogo_nascita: string
+  via_residenza: string; civico_residenza: string
+  comune_residenza: string; cap_residenza: string; provincia_residenza: string
 }
 
+// ── FIX 2: DATI_INIZIALI con tutti i nuovi campi ───────────────────────────
 const DATI_INIZIALI: DatiWizard = {
   idea: '', settore: '', forma_giuridica: 'ditta_individuale',
   nome_impresa: '', comune_sede: '', provincia_sede: '',
   ha_locale: false, serve_alimenti: false,
   nome: '', cognome: '', codice_fiscale: '', email: '', telefono: '',
+  data_nascita: '', luogo_nascita: '',
+  via_residenza: '', civico_residenza: '',
+  comune_residenza: '', cap_residenza: '', provincia_residenza: '',
 }
 
 const STEP_LABELS = ['Idea', 'Settore', 'Forma', 'Sede', 'Dettagli', 'Dati', 'Documenti']
 
-// Icone fonte documento
 const FONTE_CONFIG = {
   utente:        { icon: '📎', label: 'Carica tu', color: 'text-blue-400' },
   zipra_api:     { icon: '✨', label: 'Zipra lo recupera', color: 'text-z-green' },
@@ -170,7 +170,6 @@ const FONTE_CONFIG = {
   autogenerato:  { icon: '🤖', label: 'Zipra lo compila', color: 'text-z-green' },
 }
 
-// Card singolo documento
 function CardDocumento({
   doc, onCarica, onSkippa, onZipraLoFa, onSpiega,
 }: {
@@ -196,8 +195,6 @@ function CardDocumento({
       <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
         onChange={e => e.target.files?.[0] && onCarica(e.target.files[0])}
         className="hidden" />
-
-      {/* Header documento */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
@@ -211,8 +208,6 @@ function CardDocumento({
           <h4 className="font-head font-bold text-z-light text-sm">{doc.nome}</h4>
           <p className="text-xs text-z-muted/70 mt-0.5 leading-relaxed">{doc.descrizione}</p>
         </div>
-
-        {/* Badge stato */}
         {doc.stato === 'caricato' && (
           <div className="shrink-0 flex items-center gap-1.5 text-green-400 text-xs font-mono bg-green-400/10 px-2 py-1">
             <span>✓</span> Caricato
@@ -229,78 +224,53 @@ function CardDocumento({
           </div>
         )}
       </div>
-
-      {/* File caricato */}
       {doc.stato === 'caricato' && doc.file && (
         <div className="flex items-center gap-2 text-xs text-green-400/80 bg-green-400/8 px-3 py-2 mb-3">
           <span>📄</span>
           <span className="truncate">{doc.file.name}</span>
-          <button onClick={() => fileRef.current?.click()}
-            className="ml-auto shrink-0 underline opacity-60 hover:opacity-100">
-            Cambia
-          </button>
+          <button onClick={() => fileRef.current?.click()} className="ml-auto shrink-0 underline opacity-60 hover:opacity-100">Cambia</button>
         </div>
       )}
-
-      {/* Zipra lo fa — mostra dati necessari */}
       {doc.stato === 'zipra_lo_fa' && doc.datiNecessari && (
         <div className="text-xs text-z-green/70 bg-z-green/8 px-3 py-2 mb-3">
           Ci servirà solo: {doc.datiNecessari.join(', ')}
         </div>
       )}
-
-      {/* Azioni */}
       {doc.stato === 'non_caricato' && (
         <div className="flex flex-wrap gap-2 mt-3">
-          {/* Zipra lo recupera via API */}
           {(doc.fonte === 'zipra_api' || doc.zipraLoCompila) && (
             <button onClick={onZipraLoFa}
               className="flex items-center gap-1.5 px-3 py-2 bg-z-green text-z-dark text-xs font-bold hover:bg-green-400 transition-all">
               ✨ Zipra ci pensa
             </button>
           )}
-
-          {/* Carica file — per documenti utente o professionista */}
           {(doc.fonte === 'utente' || doc.fonte === 'professionista') && (
             <button onClick={() => fileRef.current?.click()}
               className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition-all">
               📎 Allega ora
             </button>
           )}
-
-          {/* Spiega come ottenerlo */}
           {(doc.comeOttenere || doc.dove) && (
             <button onClick={onSpiega}
               className="flex items-center gap-1.5 px-3 py-2 border border-white/8 text-z-muted text-xs hover:border-white/20 hover:text-z-light transition-all">
               💡 Come ottenerlo?
             </button>
           )}
-
-          {/* Salta per dopo */}
           <button onClick={onSkippa}
             className="flex items-center gap-1.5 px-3 py-2 border border-white/8 text-z-muted/50 text-xs hover:border-amber-400/30 hover:text-amber-400 transition-all ml-auto">
             ⏭ Allego dopo
           </button>
         </div>
       )}
-
-      {/* Documento da ente pubblico — solo info */}
       {doc.stato === 'non_caricato' && doc.fonte === 'ente_pubblico' && (
         <div className="mt-3 bg-amber-400/5 border border-amber-400/15 p-3">
           <div className="text-xs text-amber-400/80 mb-2">
             🏛️ Questo documento si richiede presso: <strong>{doc.dove ?? 'ente pubblico'}</strong>
           </div>
-          {doc.tempiStimati && (
-            <div className="text-xs text-z-muted/50">⏱ Tempi: {doc.tempiStimati}</div>
-          )}
-          <button onClick={onSkippa}
-            className="mt-2 text-xs text-amber-400 underline">
-            Lo richiedo io, proseguo
-          </button>
+          {doc.tempiStimati && <div className="text-xs text-z-muted/50">⏱ Tempi: {doc.tempiStimati}</div>}
+          <button onClick={onSkippa} className="mt-2 text-xs text-amber-400 underline">Lo richiedo io, proseguo</button>
         </div>
       )}
-
-      {/* Tempi e costi se skippato */}
       {doc.stato === 'skippato' && doc.tempiStimati && (
         <div className="mt-2 text-xs text-z-muted/40">
           ⏱ Quando lo hai, caricalo dalla dashboard
@@ -311,7 +281,6 @@ function CardDocumento({
   )
 }
 
-// Pannello "Come ottenerlo"
 function PannelloSpiega({ doc, onClose }: { doc: DocumentoWizard; onClose: () => void }) {
   return (
     <div className="border border-z-green/25 bg-z-darker p-5 mt-2">
@@ -320,9 +289,7 @@ function PannelloSpiega({ doc, onClose }: { doc: DocumentoWizard; onClose: () =>
         <button onClick={onClose} className="text-z-muted/40 hover:text-z-muted">×</button>
       </div>
       <h4 className="font-bold text-z-light text-sm mb-2">{doc.nome}</h4>
-      {doc.comeOttenere && (
-        <p className="text-sm text-z-muted leading-relaxed mb-3">{doc.comeOttenere}</p>
-      )}
+      {doc.comeOttenere && <p className="text-sm text-z-muted leading-relaxed mb-3">{doc.comeOttenere}</p>}
       {doc.dove && (
         <div className="flex items-start gap-2 text-sm">
           <span className="text-amber-400 shrink-0">📍</span>
@@ -358,7 +325,7 @@ export default function WizardPage() {
   const [daChatbot, setDaChatbot] = useState(false)
   const [erroreSubmit, setErroreSubmit] = useState<string | null>(null)
   const [pianoUtente, setPianoUtente] = useState<string | null>(null)
-  const [pianoScelto, setPianoScelto] = useState<string>('') // piano scelto nella chat/URL
+  const [pianoScelto, setPianoScelto] = useState<string>('')
   const [praticaCatalogo, setPraticaCatalogo] = useState<any>(null)
   const [datiPersonaliGiaPresenti, setDatiPersonaliGiaPresenti] = useState(false)
 
@@ -368,19 +335,17 @@ export default function WizardPage() {
     const pianoParam = urlParams.get('piano') || 'base'
     setPianoScelto(pianoParam)
 
-    // Carica dati utente se loggato — pre-compila step 5 e salta a step successivo
     const supabase = createBrowserSupabaseClient()
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('piano, nome, cognome, codice_fiscale, telefono, email')
+          .select('piano, nome, cognome, codice_fiscale, telefono, email, data_nascita, luogo_nascita, residenza, indirizzo')
           .eq('id', user.id)
           .single()
 
         setPianoUtente(profile?.piano ?? 'free')
 
-        // Pre-compila dati personali se li abbiamo già
         if (profile?.nome) {
           setDati(prev => ({
             ...prev,
@@ -389,9 +354,19 @@ export default function WizardPage() {
             codice_fiscale: profile.codice_fiscale ?? prev.codice_fiscale,
             telefono: profile.telefono ?? prev.telefono,
             email: user.email ?? prev.email,
+            data_nascita: profile.data_nascita ?? prev.data_nascita,
+            luogo_nascita: profile.luogo_nascita ?? prev.luogo_nascita,
           }))
-          // Segnala che i dati personali sono già presenti — step 5 può essere saltato
-          setDatiPersonaliGiaPresenti(true)
+          // ── FIX 3: salta step 5 SOLO se tutti i campi obbligatori sono presenti
+          const tuttiPresenti = !!(
+            profile.nome &&
+            profile.cognome &&
+            profile.codice_fiscale &&
+            profile.codice_fiscale.length === 16 &&
+            profile.telefono &&
+            user.email
+          )
+          setDatiPersonaliGiaPresenti(tuttiPresenti)
         }
       } else {
         setPianoUtente('free')
@@ -399,17 +374,12 @@ export default function WizardPage() {
     })
 
     if (daChatParam) {
-      // Veniamo dal chatbot — puliamo SEMPRE localStorage per evitare
-      // che una sessione wizard precedente già completata ci porti in dashboard
       localStorage.removeItem(STORAGE_KEY)
-
       const raw = sessionStorage.getItem('zipra_chatbot_contesto')
       sessionStorage.removeItem('zipra_chatbot_contesto')
-
       if (raw) {
         try {
           const ctx = JSON.parse(raw)
-          // Cerca comune nel nostro DB per avere anche provincia e CAP
           const comuneTrovato = ctx.comune_sede ? trovaComuneEsatto(ctx.comune_sede) : null
           setDati(prev => ({
             ...prev,
@@ -419,32 +389,19 @@ export default function WizardPage() {
             provincia_sede: comuneTrovato?.provincia || '',
             forma_giuridica: ctx.forma_giuridica || 'ditta_individuale',
           }))
-          // Salta al primo step non ancora compilato
-          if (ctx.idea && ctx.settore) {
-            setStep(2)
-          } else if (ctx.idea) {
-            setStep(1)
-          } else {
-            setStep(0)
-          }
+          if (ctx.idea && ctx.settore) setStep(2)
+          else if (ctx.idea) setStep(1)
+          else setStep(0)
           setDaChatbot(true)
-        } catch {
-          setStep(0)
-        }
-      } else {
-        // sessionStorage vuoto (es. tab aperta di nuovo) → ricomincia da step 0
-        setStep(0)
-      }
-      // In ogni caso non leggere localStorage se veniamo dal chatbot
+        } catch { setStep(0) }
+      } else { setStep(0) }
       return
     }
 
-    // Accesso diretto al wizard (non da chatbot) — leggi eventuale bozza
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        // Leggi bozza solo se NON è una pratica già completata (praticaId presente)
         if (parsed.dati && !parsed.praticaId) {
           setDati(parsed.dati)
           setStep(parsed.step ?? 0)
@@ -465,11 +422,8 @@ export default function WizardPage() {
   const avanti = () => setStep(s => Math.min(s + 1, 6))
   const indietro = () => { setStep(s => Math.max(s - 1, 0)); setErroreSubmit(null) }
 
-  // Categorizza i documenti: Zipra gestisce il massimo possibile
   const categorizzaDocumento = (nome: string, idea: string, comune: string): Partial<DocumentoWizard> => {
     const n = nome.toLowerCase()
-
-    // ── ZIPRA LO FA AUTOMATICAMENTE (zipra_api / autogenerato) ──────────
 
     if (n.includes('pec') || n.includes('posta elettronica certificata')) return {
       fonte: 'autogenerato', zipraLoCompila: true,
@@ -510,10 +464,6 @@ export default function WizardPage() {
       fonte: 'autogenerato', zipraLoCompila: true,
       descrizione: 'Zipra compila il modulo standard per la dichiarazione requisiti morali — devi solo firmarlo.',
     }
-    if (n.includes('attestazione requisiti') && (n.includes('morali') || n.includes('professional'))) return {
-      fonte: 'autogenerato', zipraLoCompila: true,
-      descrizione: 'Zipra genera il modulo precompilato con i tuoi dati — ti chiediamo solo la firma.',
-    }
     if (n.includes('scia') || n.includes('comunicazione inizio attività') || n.includes('comunica')) return {
       fonte: 'autogenerato', zipraLoCompila: true,
       descrizione: 'Zipra compila e invia la SCIA al SUAP del Comune per tuo conto.',
@@ -522,57 +472,56 @@ export default function WizardPage() {
       fonte: 'autogenerato', zipraLoCompila: true,
       descrizione: 'Zipra compila il modulo ufficiale con i tuoi dati e lo invia all\'ente competente.',
     }
-
-    // ── DA PROFESSIONISTA (non può farla Zipra, serve tecnico abilitato) ──
-
+    if (n.includes('dichiarazione') && (n.includes('inizio') || n.includes('attività') || n.includes('avvio'))) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra compila e invia la dichiarazione di inizio attività all\'ente competente.',
+      datiNecessari: ['Codice ATECO', 'Dati impresa', 'Sede'],
+    }
+    if (n.includes('partita iva') || n.includes('modello aa') || n.includes('apertura p.iva') || n.includes('agenzia entrate')) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra apre la Partita IVA all\'Agenzia delle Entrate con il modello AA9.',
+      datiNecessari: ['Codice fiscale', 'Codice ATECO'],
+    }
+    if (n.includes('inps') || n.includes('iscrizione previdenziale') || n.includes('gestione separata') || n.includes('artigiani') || n.includes('commercianti')) return {
+      fonte: 'zipra_api', zipraLoCompila: true,
+      descrizione: 'Zipra gestisce l\'iscrizione previdenziale INPS.',
+      datiNecessari: ['Codice fiscale'],
+    }
+    if (n.includes('notifica sanitaria') || n.includes('asl') || n.includes('ats') || n.includes('igiene')) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra invia la notifica sanitaria all\'ASL/ATS competente.',
+      datiNecessari: ['Dati impresa', 'Indirizzo sede', 'Piano HACCP'],
+    }
+    if (n.includes('registro imprese') || n.includes('camera di commercio') || n.includes('cciaa')) return {
+      fonte: 'autogenerato', zipraLoCompila: true,
+      descrizione: 'Zipra invia la pratica al Registro delle Imprese tramite ComUnica.',
+      datiNecessari: ['Dati anagrafici', 'Codice ATECO'],
+    }
     if (n.includes('haccp') || n.includes('autocontrollo alimentare')) return {
       fonte: 'professionista',
       descrizione: 'Documento obbligatorio per chi manipola alimenti. Lo prepara un consulente HACCP.',
-      comeOttenere: 'Consulente HACCP o tecnologo alimentare. Chiedi preventivo sul nostro portale.',
+      comeOttenere: 'Consulente HACCP o tecnologo alimentare.',
       tempiStimati: '1-2 settimane',
       costoStimato: '€300-800',
     }
-    if (n.includes('conformità impianti') || n.includes('dichiarazione di conformità') || n.includes('impianti elettrici') || n.includes('impianto elettrico')) return {
+    if (n.includes('conformità impianti') || n.includes('dichiarazione di conformità') || n.includes('impianti elettrici')) return {
       fonte: 'professionista',
       descrizione: 'Rilasciata dall\'installatore o tecnico abilitato che ha verificato gli impianti.',
-      comeOttenere: 'Elettricista o tecnico abilitato DM 37/2008 che ha installato o verificato gli impianti.',
+      comeOttenere: 'Elettricista o tecnico abilitato DM 37/2008.',
       costoStimato: '€150-400',
     }
     if (n.includes('planimetria') || n.includes('pianta')) return {
       fonte: 'professionista',
-      descrizione: 'Pianta del locale con misure e destinazioni d\'uso. La prepara un tecnico (geometra/architetto).',
-      comeOttenere: 'Geometra o architetto abilitato. In alcuni casi è già disponibile dal proprietario del locale.',
+      descrizione: 'Pianta del locale con misure e destinazioni d\'uso. La prepara un tecnico.',
+      comeOttenere: 'Geometra o architetto abilitato.',
       costoStimato: '€100-250',
     }
-    if (n.includes('perizia') || n.includes('valutazione tecnica')) return {
-      fonte: 'professionista',
-      descrizione: 'Documento tecnico redatto da professionista abilitato.',
-      costoStimato: 'Variabile',
-    }
-
-    // ── DA ENTE PUBBLICO ───────────────────────────────────────────────
-
     if (n.includes('agibilità') || n.includes('certificato di agibilità')) return {
       fonte: 'ente_pubblico',
       descrizione: 'Certificato che attesta l\'idoneità del locale all\'uso previsto.',
       dove: `Comune di ${comune} — Ufficio Tecnico`,
-      comeOttenere: 'Richiedi all\'ufficio tecnico del Comune oppure verifica se già disponibile presso il proprietario del locale.',
       tempiStimati: '2-6 settimane se non già disponibile',
     }
-    if (n.includes('autorizzazione sanitaria') || n.includes('nulla osta sanitario')) return {
-      fonte: 'ente_pubblico',
-      descrizione: 'Autorizzazione rilasciata dall\'ASL locale dopo sopralluogo.',
-      dove: `ASL di ${comune}`,
-      tempiStimati: '30-60 giorni',
-    }
-    if (n.includes('licenza') && (n.includes('comune') || n.includes('municipale'))) return {
-      fonte: 'ente_pubblico',
-      descrizione: 'Licenza rilasciata dal Comune.',
-      dove: `Comune di ${comune} — SUAP`,
-    }
-
-    // ── L'UTENTE PORTA QUELLO CHE HA GIÀ ─────────────────────────────
-
     if (n.includes('documento di identità') || n.includes('carta d\'identità') || n.includes('passaporto') || n.includes('patente')) return {
       fonte: 'utente',
       descrizione: 'Carta d\'identità, passaporto o patente in corso di validità.',
@@ -580,94 +529,24 @@ export default function WizardPage() {
     if (n.includes('contratto di locazione') || n.includes('atto di proprietà') || n.includes('titolo di disponibilità')) return {
       fonte: 'utente',
       descrizione: 'Il contratto di affitto o l\'atto notarile del locale che hai scelto.',
-      comeOttenere: 'È il contratto firmato col proprietario del locale. Se non lo hai ancora, puoi aggiungerlo dopo.',
+      comeOttenere: 'È il contratto firmato col proprietario del locale.',
     }
     if (n.includes('titolo di studio') || n.includes('diploma') || n.includes('laurea') || n.includes('attestato professionale') || n.includes('qualifica')) return {
       fonte: 'utente',
       descrizione: 'Il tuo diploma, laurea o attestato di qualifica professionale.',
-      comeOttenere: 'Il tuo documento originale. Se smarrito: richiedilo all\'istituto scolastico o università.',
-    }
-    if (n.includes('corso') || n.includes('formazione') || n.includes('attestato') && n.includes('sicurezza')) return {
-      fonte: 'utente',
-      descrizione: 'Attestato del corso di formazione già effettuato.',
-      comeOttenere: 'Se non l\'hai ancora fatto, il corso si prenota online su piattaforme come Informa o Punto Sicuro. Durata 4-16h, costo €30-100.',
-      costoStimato: '€30-100',
     }
     if (n.includes('polizza') || n.includes('assicurazione') || n.includes('rc professionale')) return {
       fonte: 'utente',
       descrizione: 'Polizza assicurativa di responsabilità civile professionale.',
-      comeOttenere: 'Richiedi preventivo a qualsiasi compagnia assicurativa (Generali, AXA, UnipolSai, ecc.).',
+      comeOttenere: 'Richiedi preventivo a qualsiasi compagnia assicurativa.',
       costoStimato: '€200-800/anno',
     }
-    if (n.includes('schede tecniche') || n.includes('scheda di sicurezza')) return {
-      fonte: 'utente',
-      descrizione: 'Schede tecniche dei prodotti che utilizzi. Le fornisce il produttore o distributore.',
-      comeOttenere: 'Richiedi le schede al fornitore dei prodotti o scaricale dal sito del produttore.',
-    }
-    // Dichiarazione inizio attività → Zipra la compila
-    if (n.includes('dichiarazione') && (n.includes('inizio') || n.includes('attività') || n.includes('avvio'))) return {
-      fonte: 'autogenerato', zipraLoCompila: true,
-      descrizione: 'Zipra compila e invia la dichiarazione di inizio attività all\'ente competente.',
-      datiNecessari: ['Codice ATECO', 'Dati impresa', 'Sede'],
-    }
- 
-    // SCIA → Zipra
-    if (n.includes('scia') || n.includes('segnalazione certificata')) return {
-      fonte: 'autogenerato', zipraLoCompila: true,
-      descrizione: 'Zipra prepara e invia la SCIA al SUAP del Comune.',
-      datiNecessari: ['Dati impresa', 'Indirizzo sede'],
-    }
- 
-    // Comunicazione al Registro Imprese → Zipra
-    if (n.includes('comunica') || n.includes('registro imprese') || n.includes('camera di commercio') || n.includes('cciaa')) return {
-      fonte: 'autogenerato', zipraLoCompila: true,
-      descrizione: 'Zipra invia la pratica al Registro delle Imprese tramite ComUnica.',
-      datiNecessari: ['Dati anagrafici', 'Codice ATECO'],
-    }
- 
-    // Modello AA9 / apertura P.IVA → Zipra
-    if (n.includes('partita iva') || n.includes('modello aa') || n.includes('apertura p.iva') || n.includes('agenzia entrate')) return {
-      fonte: 'autogenerato', zipraLoCompila: true,
-      descrizione: 'Zipra apre la Partita IVA all\'Agenzia delle Entrate con il modello AA9.',
-      datiNecessari: ['Codice fiscale', 'Codice ATECO'],
-    }
- 
-    // Iscrizione INPS → Zipra
-    if (n.includes('inps') || n.includes('iscrizione previdenziale') || n.includes('gestione separata') || n.includes('artigiani') || n.includes('commercianti')) return {
-      fonte: 'zipra_api', zipraLoCompila: true,
-      descrizione: 'Zipra gestisce l\'iscrizione previdenziale INPS.',
-      datiNecessari: ['Codice fiscale'],
-    }
- 
-    // Notifica sanitaria / ASL → Zipra
-    if (n.includes('notifica sanitaria') || n.includes('asl') || n.includes('ats') || n.includes('igiene')) return {
-      fonte: 'autogenerato', zipraLoCompila: true,
-      descrizione: 'Zipra invia la notifica sanitaria all\'ASL/ATS competente.',
-      datiNecessari: ['Dati impresa', 'Indirizzo sede', 'Piano HACCP'],
-    }
- 
-    // Requisiti morali / autocertificazione → Zipra
-    if (n.includes('requisiti morali') || n.includes('antimafia') || n.includes('autocertificazione') || n.includes('dichiarazione sostitutiva')) return {
-      fonte: 'autogenerato', zipraLoCompila: true,
-      descrizione: 'Zipra compila l\'autocertificazione dei requisiti morali e la invia all\'ente.',
-      datiNecessari: ['Dati anagrafici', 'Codice fiscale'],
-    }
- 
-    // Codice fiscale impresa → Zipra
-    if (n.includes('codice fiscale') && (n.includes('impresa') || n.includes('società') || n.includes('ditta'))) return {
-      fonte: 'autogenerato', zipraLoCompila: true,
-      descrizione: 'Zipra ottiene il codice fiscale dell\'impresa dall\'Agenzia delle Entrate.',
-      datiNecessari: ['Dati impresa'],
-    }
-
-    // Default: l'utente porta il documento ma con info su come ottenerlo
     return {
       fonte: 'utente',
       descrizione: `Documento necessario per aprire ${idea} a ${comune}.`,
     }
   }
 
-  // Step 6 — prepara lista documenti con categorizzazione intelligente
   const preparaStepDocumenti = async () => {
     setLoading(true)
     try {
@@ -684,8 +563,6 @@ export default function WizardPage() {
       const data = await res.json()
       setAnalisi(data)
 
-      // Cerca la pratica nel catalogo per avere il prezzo reale
-      // Cerca per codice ATECO o per parole chiave nell'idea
       const ideaL = dati.idea.toLowerCase()
       const found = CATALOGO.find(p => {
         const t = p.titolo.toLowerCase()
@@ -704,18 +581,8 @@ export default function WizardPage() {
       }) ?? CATALOGO.find(p => p.id === 'apertura_ditta')
       setPraticaCatalogo(found ?? null)
 
-      if (data.attivita_regolamentata) {
-        setAttivitaRegolamentata(data.attivita_regolamentata)
-      }
+      if (data.attivita_regolamentata) setAttivitaRegolamentata(data.attivita_regolamentata)
 
-      // ── SOLO LA CI È UNIVERSALE — tutto il resto lo decide l'AI ──────
-      // L'AI conosce l'attività specifica e restituisce esattamente
-      // i documenti necessari per quell'attività in quel comune.
-      // Noi categorizziamo (chi li fa: Zipra vs utente) ma non aggiungiamo nulla extra.
-
-      const ideaLower = dati.idea.toLowerCase()
-
-      // CI — unico documento fisso universale
       const docsBase: DocumentoWizard[] = [
         {
           id: 'doc_identita',
@@ -725,21 +592,18 @@ export default function WizardPage() {
           fonte: 'utente',
           stato: 'non_caricato',
         },
+        {
+          id: 'pec',
+          nome: 'PEC (Posta Elettronica Certificata)',
+          descrizione: 'Zipra attiva e registra la PEC a nome della tua impresa — non devi fare nulla.',
+          obbligatorio: true,
+          fonte: 'autogenerato',
+          zipraLoCompila: true,
+          datiNecessari: ['Nome impresa', 'Codice fiscale'],
+          stato: 'zipra_lo_fa',
+        },
       ]
 
-      // PEC — quasi sempre necessaria per le imprese, Zipra la gestisce
-      docsBase.push({
-        id: 'pec',
-        nome: 'PEC (Posta Elettronica Certificata)',
-        descrizione: 'Zipra attiva e registra la PEC a nome della tua impresa — non devi fare nulla.',
-        obbligatorio: true,
-        fonte: 'autogenerato',
-        zipraLoCompila: true,
-        datiNecessari: ['Nome impresa', 'Codice fiscale'],
-        stato: 'zipra_lo_fa',
-      })
-
-      // Contratto locale — solo se ha sede fisica
       if (dati.ha_locale) {
         docsBase.push({
           id: 'contratto_locale',
@@ -748,16 +612,15 @@ export default function WizardPage() {
           obbligatorio: true,
           fonte: 'utente',
           stato: 'non_caricato',
-          comeOttenere: 'È il contratto firmato col proprietario. Se non lo hai ancora, puoi aggiungerlo dalla dashboard.',
+          comeOttenere: 'È il contratto firmato col proprietario. Puoi aggiungerlo anche dalla dashboard.',
         })
       }
 
-      // HACCP — solo se serve alimenti
       if (dati.serve_alimenti) {
         docsBase.push({
           id: 'piano_haccp',
           nome: 'Piano HACCP (autocontrollo alimentare)',
-          descrizione: 'Obbligatorio per legge per chi manipola alimenti. Lo prepara un consulente HACCP — noi ti mettiamo in contatto.',
+          descrizione: 'Obbligatorio per chi manipola alimenti. Lo prepara un consulente HACCP.',
           obbligatorio: true,
           fonte: 'professionista',
           stato: 'non_caricato',
@@ -767,42 +630,36 @@ export default function WizardPage() {
         })
       }
 
-      // ── Documenti dall'AI — l'AI sa esattamente cosa serve per questa attività ──
-      // Categorizziamo ogni documento (chi lo fa) ma NON aggiungiamo roba extra
       const nomiFissi = new Set(docsBase.map(d => d.nome.toLowerCase()))
       const docsAI: DocumentoWizard[] = []
       const visti = new Set<string>()
 
+      const gestisceZipra = [
+        'pec', 'posta elettronica certificata',
+        'casellario', 'certificato penale', 'carichi pendenti',
+        'estratto contributivo', 'estratto inps',
+        'durc', 'documento unico di regolarità',
+        'visura camerale', 'visura catastale',
+        'comunica', 'codice fiscale', 'tesserino fiscale',
+        'certificato di residenza', 'autocertificazione',
+        'dichiarazione sostitutiva', 'requisiti morali',
+        'documento di identità', "carta d'identità",
+        'scia', 'suap', 'partita iva', 'apertura p.iva',
+        'modello aa', 'agenzia entrate',
+        'firma digitale', 'procura', 'procura speciale',
+        'iban', 'coordinate bancarie',
+        'inps', 'iscrizione previdenziale',
+        'dichiarazione inizio', 'dichiarazione avvio', 'dichiarazione attività',
+        'notifica sanitaria', 'asl', 'ats',
+        'registro imprese', 'camera di commercio', 'cciaa',
+        'antimafia', 'camera commercio',
+      ]
+
       for (let i = 0; i < (data.documenti_necessari ?? []).length; i++) {
         const nome: string = data.documenti_necessari[i]
         const nLower = nome.toLowerCase()
-
-        // Salta duplicati
         if (visti.has(nLower)) continue
         visti.add(nLower)
-
-        // Salta tutto ciò che fa Zipra o è già coperto — MAI mostrarlo come compito utente
-const gestisceZipra = [
-      'pec', 'posta elettronica certificata',
-      'casellario', 'certificato penale', 'carichi pendenti',
-      'estratto contributivo', 'estratto inps',
-      'durc', 'documento unico di regolarità',
-      'visura camerale', 'visura catastale',
-      'comunica', 'codice fiscale', 'tesserino fiscale',
-      'certificato di residenza', 'autocertificazione',
-      'dichiarazione sostitutiva', 'requisiti morali',
-      "documento di identità", "carta d'identità",
-      'scia', 'suap', 'partita iva', 'apertura p.iva',
-      'modello aa', 'agenzia entrate',
-      'firma digitale', 'firma digitale attiva', 'procura',
-      'procura speciale', 'procura digitale',
-      'iban', 'coordinate bancarie',
-      'inps', 'iscrizione previdenziale',
-      'dichiarazione inizio', 'dichiarazione avvio', 'dichiarazione attività',
-      'notifica sanitaria', 'asl', 'ats',
-      'registro imprese', 'camera di commercio', 'cciaa',
-      'antimafia', 'camera commercio',
-    ]
         if (
           nomiFissi.has(nLower) ||
           gestisceZipra.some(k => nLower.includes(k)) ||
@@ -854,8 +711,6 @@ const gestisceZipra = [
       const supabase = createBrowserSupabaseClient()
       let { data: { user } } = await supabase.auth.getUser()
 
-      // ── Utente non loggato (es. arriva dal chatbot senza registrarsi) ──
-      // Creiamo un account temporaneo con la sua email
       if (!user) {
         const email = d.email?.trim()
         if (!email) {
@@ -863,17 +718,13 @@ const gestisceZipra = [
           setLoading(false)
           return
         }
-        // Usa password fissa basata sull'email — così ogni tentativo usa la stessa
-        // e non si creano account duplicati con password diverse
         const emailHash = email.split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0)
         const tempPassword = 'Zipra' + Math.abs(emailHash).toString(36).toUpperCase().slice(0, 6) + '!'
 
-        // Prima prova a fare signIn — forse l'account esiste già
         const { data: existingLogin } = await supabase.auth.signInWithPassword({ email, password: tempPassword })
         if (existingLogin?.user) {
           user = existingLogin.user
         } else {
-          // Account non esiste o password diversa — crea nuovo account
           const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email,
             password: tempPassword,
@@ -885,7 +736,7 @@ const gestisceZipra = [
 
           if (signUpError) {
             if (signUpError.message?.includes('rate limit') || signUpError.message?.includes('over_email_send_rate_limit')) {
-              setErroreSubmit('Troppe richieste a Supabase. Aspetta 1 minuto e riprova.')
+              setErroreSubmit('Troppe richieste. Aspetta 1 minuto e riprova.')
             } else if (signUpError.message?.includes('already registered')) {
               setErroreSubmit('Hai già un account con questa email. Vai alla pagina di login.')
             } else {
@@ -903,13 +754,10 @@ const gestisceZipra = [
 
           user = signUpData.user
 
-          // Se email confirmation attiva, signIn subito dopo
           if (!signUpData.session) {
-            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
-              email, password: tempPassword,
-            })
+            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password: tempPassword })
             if (loginError || !loginData.user) {
-              setErroreSubmit('Conferma la tua email e poi accedi con: ' + email + ' / ' + tempPassword)
+              setErroreSubmit(`Conferma la tua email e poi accedi con: ${email} / ${tempPassword}`)
               setLoading(false)
               return
             }
@@ -917,7 +765,6 @@ const gestisceZipra = [
           }
         }
 
-        // Crea profilo con retry
         for (let t = 0; t < 3; t++) {
           if (t > 0) await new Promise(r => setTimeout(r, 600))
           const { error: pe } = await supabase.from('profiles').upsert({
@@ -932,7 +779,6 @@ const gestisceZipra = [
           if (t === 2) { setErroreSubmit('Errore profilo: ' + pe.message); setLoading(false); return }
         }
 
-        // Salva per toast in dashboard + invia email benvenuto
         sessionStorage.setItem('zipra_temp_password', JSON.stringify({ email, password: tempPassword }))
         fetch('/api/auth/benvenuto', {
           method: 'POST',
@@ -941,7 +787,6 @@ const gestisceZipra = [
         }).catch(() => {})
       }
 
-      // Assicura che il profilo esista (per utenti già loggati il trigger potrebbe non aver girato)
       await supabase.from('profiles').upsert({
         id: user.id,
         email: user.email ?? '',
@@ -949,23 +794,32 @@ const gestisceZipra = [
         piano: 'free',
       }, { onConflict: 'id', ignoreDuplicates: true })
 
+      // ── FIX 6: salva tutti i campi anagrafici sul profilo ─────────────────
       if (d.nome) {
+        const residenza = [
+          d.via_residenza, d.civico_residenza,
+          d.cap_residenza, d.comune_residenza,
+          d.provincia_residenza ? `(${d.provincia_residenza})` : ''
+        ].filter(Boolean).join(' ').trim()
+
         await supabase.from('profiles').update({
           nome: d.nome,
           cognome: d.cognome,
           full_name: `${d.nome} ${d.cognome}`.trim(),
           codice_fiscale: d.codice_fiscale,
           telefono: d.telefono,
+          data_nascita: d.data_nascita || null,
+          luogo_nascita: d.luogo_nascita || null,
+          residenza: residenza || null,
+          indirizzo: residenza || null,
         }).eq('id', user.id)
       }
 
-      // Carica documenti allegati su Storage
       const documentiCaricati: any[] = []
       for (const doc of documenti) {
         if (doc.stato === 'caricato' && doc.file) {
           const path = `${user.id}/wizard/${Date.now()}_${doc.file.name}`
-          const { data: uploadData } = await supabase.storage
-            .from('documenti').upload(path, doc.file)
+          const { data: uploadData } = await supabase.storage.from('documenti').upload(path, doc.file)
           if (uploadData) {
             documentiCaricati.push({ id: doc.id, nome: doc.nome, path })
           }
@@ -977,12 +831,11 @@ const gestisceZipra = [
         .map(doc => ({ id: doc.id, nome: doc.nome }))
 
       const tipoAttivita = analisi?.descrizione_ateco
-  ? `${d.forma_giuridica === 'srl' || d.forma_giuridica === 'srls' ? 'Costituzione' : 'Apertura'} — ${analisi.descrizione_ateco}`
-  : (d.idea || 'Nuova attività').replace(/^(voglio|vorrei|apro|aprire|creare)\s+/i, '').replace(/^un[ao]?\s+/i, '').trim() || 'Nuova attività'
+        ? `${d.forma_giuridica === 'srl' || d.forma_giuridica === 'srls' ? 'Costituzione' : 'Apertura'} — ${analisi.descrizione_ateco}`
+        : (d.idea || 'Nuova attività').replace(/^(voglio|vorrei|apro|aprire|creare)\s+/i, '').replace(/^un[ao]?\s+/i, '').trim() || 'Nuova attività'
       const formaGiuridica = d.forma_giuridica?.trim() || 'ditta_individuale'
       const nomeImpresa = d.nome_impresa?.trim() || d.idea?.trim() || 'Nuova impresa'
       const comuneSede = d.comune_sede?.trim() || 'Da definire'
-      // Cerca provincia nel DB comuni se mancante
       const comuneDB = d.provincia_sede?.trim() ? null : trovaComuneEsatto(comuneSede)
       const provinciaSede = (d.provincia_sede?.trim() || comuneDB?.provincia || 'ND').toUpperCase().slice(0, 2)
 
@@ -1019,8 +872,6 @@ const gestisceZipra = [
       if (pratica) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ praticaId: pratica.id }))
         const piano = new URLSearchParams(window.location.search).get('piano') || 'singola'
-        // → Checkout Stripe con pratica_id e piano
-        // Stripe dopo il pagamento redirecta a /onboarding/firma?pratica_id=X&user_id=Y
         window.location.href = `/checkout?pratica=${pratica.id}&piano=${piano}`
         return
       }
@@ -1032,15 +883,11 @@ const gestisceZipra = [
     }
   }
 
-  const handleSubmit = async () => {
-    await avviaCreazione(dati)
-  }
+  const handleSubmit = async () => { await avviaCreazione(dati) }
 
   const docMancanti = documenti.filter(d => d.stato === 'skippato' || d.stato === 'non_caricato')
   const docPronti = documenti.filter(d => d.stato === 'caricato' || d.stato === 'zipra_lo_fa')
-  const progresso = documenti.length > 0
-    ? Math.round((docPronti.length / documenti.length) * 100)
-    : 0
+  const progresso = documenti.length > 0 ? Math.round((docPronti.length / documenti.length) * 100) : 0
 
   if (loading) return (
     <div className="min-h-screen bg-z-darker flex items-center justify-center px-4">
@@ -1052,15 +899,13 @@ const gestisceZipra = [
         <p className="text-z-muted text-sm">
           {step >= 6
             ? 'Carico i documenti e preparo tutto per l\'invio.'
-            : `Identifico le pratiche necessarie per ${dati.comune_sede || 'il tuo comune'}.`
-          }
+            : `Identifico le pratiche necessarie per ${dati.comune_sede || 'il tuo comune'}.`}
         </p>
         <p className="text-z-muted/40 text-xs mt-4">Ci vogliono circa 10-20 secondi...</p>
       </div>
     </div>
   )
 
-  // ── Wizard steps ──────────────────────────────────────
   return (
     <div className="min-h-screen bg-z-darker flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-lg">
@@ -1072,7 +917,6 @@ const gestisceZipra = [
           </p>
         </div>
 
-        {/* Progress bar */}
         <div className="flex gap-1 mb-6">
           {STEP_LABELS.map((l, i) => (
             <div key={l} className="flex-1">
@@ -1082,7 +926,6 @@ const gestisceZipra = [
           ))}
         </div>
 
-        {/* Banner "continua dalla chat" */}
         {daChatbot && dati.idea && (
           <div className="mb-4 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl px-5 py-4 flex items-start gap-3">
             <span className="text-2xl shrink-0">💬</span>
@@ -1094,7 +937,7 @@ const gestisceZipra = [
           </div>
         )}
 
-        {/* ── STEP 0 — Idea ─────────────────────────────── */}
+        {/* STEP 0 */}
         {step === 0 && (
           <div className="bg-z-mid border border-white/8 p-8">
             <h2 className="font-head font-bold text-2xl text-z-light mb-2">Cosa vuoi fare?</h2>
@@ -1106,7 +949,7 @@ const gestisceZipra = [
           </div>
         )}
 
-        {/* ── STEP 1 — Settore ──────────────────────────── */}
+        {/* STEP 1 */}
         {step === 1 && (
           <div className="bg-z-mid border border-white/8 p-8">
             <h2 className="font-head font-bold text-2xl text-z-light mb-2">Che settore?</h2>
@@ -1131,11 +974,16 @@ const gestisceZipra = [
           </div>
         )}
 
-        {/* ── STEP 2 — Forma giuridica ──────────────────── */}
+        {/* STEP 2 */}
         {step === 2 && (
           <div className="bg-z-mid border border-white/8 p-8">
             <h2 className="font-head font-bold text-2xl text-z-light mb-2">Forma giuridica?</h2>
             <p className="text-z-muted text-sm mb-6">Se non sei sicuro scegli Ditta Individuale — è la più semplice per partire.</p>
+            {daChatbot && dati.forma_giuridica !== 'ditta_individuale' && (
+              <div className="mb-4 bg-z-green/8 border border-z-green/20 rounded-xl px-4 py-2.5 text-xs text-z-green">
+                Abbiamo pre-selezionato la forma giuridica in base alla tua richiesta — confermala o modificala.
+              </div>
+            )}
             <div className="space-y-3">
               {[
                 { id: 'ditta_individuale', label: 'Ditta Individuale', desc: 'Semplice, veloce, senza notaio. Lavori da solo.' },
@@ -1153,7 +1001,7 @@ const gestisceZipra = [
           </div>
         )}
 
-        {/* ── STEP 3 — Sede ─────────────────────────────── */}
+        {/* STEP 3 */}
         {step === 3 && (
           <div className="bg-z-mid border border-white/8 p-8">
             <h2 className="font-head font-bold text-2xl text-z-light mb-2">Dove sarà la sede?</h2>
@@ -1177,7 +1025,7 @@ const gestisceZipra = [
           </div>
         )}
 
-        {/* ── STEP 4 — Dettagli ─────────────────────────── */}
+        {/* STEP 4 */}
         {step === 4 && (
           <div className="bg-z-mid border border-white/8 p-8">
             <h2 className="font-head font-bold text-2xl text-z-light mb-2">Qualche dettaglio</h2>
@@ -1204,12 +1052,15 @@ const gestisceZipra = [
           </div>
         )}
 
-        {/* ── STEP 5 — Dati personali ───────────────────── */}
+        {/* ── FIX 4: STEP 5 completo con tutti i campi anagrafici ─────────── */}
         {step === 5 && (
           <div className="bg-z-mid border border-white/8 p-8">
             <h2 className="font-head font-bold text-2xl text-z-light mb-2">I tuoi dati</h2>
-            <p className="text-z-muted text-sm mb-6">Necessari per le pratiche burocratiche.</p>
+            <p className="text-z-muted text-sm mb-6">
+              Necessari per le pratiche burocratiche e per la procura speciale a Zipra.
+            </p>
             <div className="space-y-4">
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label-field">Nome *</label>
@@ -1222,40 +1073,129 @@ const gestisceZipra = [
                     placeholder="Rossi" className="input-field" />
                 </div>
               </div>
+
               <div>
                 <label className="label-field">Codice Fiscale *</label>
-                <input value={dati.codice_fiscale} onChange={e => aggiorna('codice_fiscale', e.target.value.toUpperCase())}
-                  placeholder="RSSMRA80A01H501Z" className="input-field font-mono" maxLength={16} />
+                <input
+                  value={dati.codice_fiscale}
+                  onChange={e => aggiorna('codice_fiscale', e.target.value.toUpperCase())}
+                  placeholder="RSSMRA80A01H501Z"
+                  className="input-field font-mono"
+                  maxLength={16}
+                />
                 {dati.codice_fiscale.length > 0 && dati.codice_fiscale.length !== 16 && (
                   <p className="text-xs text-red-400 mt-1">Il codice fiscale deve essere di 16 caratteri</p>
                 )}
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label-field">Data di nascita *</label>
+                  <input
+                    type="date"
+                    value={dati.data_nascita}
+                    onChange={e => aggiorna('data_nascita', e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label-field">Luogo di nascita *</label>
+                  <input
+                    value={dati.luogo_nascita}
+                    onChange={e => aggiorna('luogo_nascita', e.target.value)}
+                    placeholder="Roma"
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="label-field">Indirizzo di residenza *</label>
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="col-span-3">
+                    <input
+                      value={dati.via_residenza}
+                      onChange={e => aggiorna('via_residenza', e.target.value)}
+                      placeholder="Via Roma"
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      value={dati.civico_residenza}
+                      onChange={e => aggiorna('civico_residenza', e.target.value)}
+                      placeholder="N."
+                      className="input-field"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <div>
+                    <input
+                      value={dati.cap_residenza}
+                      onChange={e => aggiorna('cap_residenza', e.target.value)}
+                      placeholder="CAP"
+                      className="input-field font-mono"
+                      maxLength={5}
+                    />
+                  </div>
+                  <div>
+                    <input
+                      value={dati.comune_residenza}
+                      onChange={e => aggiorna('comune_residenza', e.target.value)}
+                      placeholder="Comune"
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      value={dati.provincia_residenza}
+                      onChange={e => aggiorna('provincia_residenza', e.target.value.toUpperCase())}
+                      placeholder="Prov."
+                      className="input-field font-mono"
+                      maxLength={2}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="label-field">Telefono *</label>
-                <input value={dati.telefono} onChange={e => aggiorna('telefono', e.target.value.replace(/[^0-9+\s]/g, ''))}
-                  placeholder="+39 333 1234567" className="input-field" />
-                {dati.telefono.length > 0 && dati.telefono.replace(/[\s+]/g, '').length < 9 && (
-                  <p className="text-xs text-red-400 mt-1">Inserisci un numero di telefono valido</p>
-                )}
+                <input
+                  value={dati.telefono}
+                  onChange={e => aggiorna('telefono', e.target.value.replace(/[^0-9+\s]/g, ''))}
+                  placeholder="+39 333 1234567"
+                  className="input-field"
+                />
+                <p className="text-xs text-z-muted/50 mt-1">
+                  Usato per il codice OTP di firma digitale — nessun marketing.
+                </p>
               </div>
+
               <div>
                 <label className="label-field">Email *</label>
-                <input type="email" value={dati.email} onChange={e => aggiorna('email', e.target.value)}
-                  placeholder="mario@esempio.it" className="input-field" />
+                <input
+                  type="email"
+                  value={dati.email}
+                  onChange={e => aggiorna('email', e.target.value)}
+                  placeholder="mario@esempio.it"
+                  className="input-field"
+                />
                 {dati.email.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dati.email) && (
                   <p className="text-xs text-red-400 mt-1">Inserisci un indirizzo email valido</p>
                 )}
-                <p className="text-xs text-z-muted/50 mt-1">Userai questa email per accedere alla dashboard.</p>
+                <p className="text-xs text-z-muted/50 mt-1">
+                  Riceverai le credenziali di accesso e le email di firma su questo indirizzo.
+                </p>
               </div>
+
             </div>
           </div>
         )}
 
-        {/* ── STEP 6 — Documenti ────────────────────────── */}
+        {/* STEP 6 — Documenti */}
         {step === 6 && documenti.length > 0 && (
           <div className="w-full max-w-2xl">
-
-            {/* Banner piano — inclusa o a pagamento */}
             {(pianoUtente === 'base' || pianoUtente === 'pro' || pianoScelto === 'base' || pianoScelto === 'pro') ? (
               <div className="bg-z-green/10 border border-z-green/25 rounded-2xl px-5 py-4 flex items-start gap-3 mb-4">
                 <span className="text-2xl shrink-0">✅</span>
@@ -1265,7 +1205,7 @@ const gestisceZipra = [
                   </p>
                   <p className="text-z-muted/70 text-xs mt-0.5">
                     Tutte le pratiche di apertura incluse nell'abbonamento annuale.
-                    {praticaCatalogo?.dirittiEnti > 0 && ` Paghi solo i diritti agli enti (~€${praticaCatalogo.dirittiEnti}) quando richiesti dagli enti.`}
+                    {praticaCatalogo?.dirittiEnti > 0 && ` Paghi solo i diritti agli enti (~€${praticaCatalogo.dirittiEnti}).`}
                   </p>
                 </div>
               </div>
@@ -1286,20 +1226,14 @@ const gestisceZipra = [
                     <div className="text-[10px] text-z-muted/50 mt-0.5">Totale</div>
                   </div>
                 </div>
-                <p className="text-xs text-z-muted/40 mt-3">
-                  Paghi solo dopo la revisione e conferma da parte di Zipra.
-                </p>
               </div>
             ) : null}
 
-            {/* Alert attività regolamentata */}
             {attivitaRegolamentata && (
               <div className="bg-amber-400/8 border border-amber-400/25 p-4 mb-4">
-                <div className="font-bold text-amber-400 text-sm mb-1">
-                  ⚠️ Attività soggetta a requisiti professionali
-                </div>
+                <div className="font-bold text-amber-400 text-sm mb-1">⚠️ Attività soggetta a requisiti professionali</div>
                 <p className="text-xs text-amber-400/70 leading-relaxed">
-                  {attivitaRegolamentata.nota ?? 'Questa attività richiede qualifiche o abilitazioni specifiche. Verifica di avere i requisiti prima di procedere.'}
+                  {attivitaRegolamentata.nota ?? 'Questa attività richiede qualifiche o abilitazioni specifiche.'}
                 </p>
               </div>
             )}
@@ -1312,11 +1246,8 @@ const gestisceZipra = [
               <p className="text-z-muted text-sm mb-4">
                 Carica quello che hai subito. Per il resto clicca <span className="text-amber-400">⏭ Allego dopo</span> — lo carichi dalla dashboard quando sei pronto.
               </p>
-
-              {/* Barra progresso */}
               <div className="h-1.5 bg-white/8 rounded-full overflow-hidden mb-1">
-                <div className="h-full bg-z-green rounded-full transition-all duration-500"
-                  style={{ width: `${progresso}%` }} />
+                <div className="h-full bg-z-green rounded-full transition-all duration-500" style={{ width: `${progresso}%` }} />
               </div>
               <div className="text-xs font-mono text-z-muted/40 text-right">{progresso}% pronti</div>
             </div>
@@ -1338,14 +1269,12 @@ const gestisceZipra = [
               ))}
             </div>
 
-            {/* Riepilogo prima di procedere */}
             {docMancanti.filter(d => d.stato === 'non_caricato').length === 0 && (
               <div className="mt-4 p-4 bg-z-green/8 border border-z-green/20 text-sm text-z-muted">
                 <span className="text-z-green font-bold">✓ Pronto.</span>{' '}
                 {docMancanti.length > 0
                   ? `Hai ${docMancanti.length} documenti da caricare dopo — puoi farlo dalla dashboard.`
-                  : 'Tutti i documenti sono pronti!'
-                }
+                  : 'Tutti i documenti sono pronti!'}
               </div>
             )}
 
@@ -1370,23 +1299,21 @@ const gestisceZipra = [
           </div>
         )}
 
-        {/* ── Navigazione ───────────────────────────────── */}
+        {/* Navigazione */}
         {step < 6 && (
           <div className="flex gap-3 mt-4">
             {step > 0 && (
-              <button onClick={indietro} className="btn-secondary flex-1 justify-center">
-                ← Indietro
-              </button>
+              <button onClick={indietro} className="btn-secondary flex-1 justify-center">← Indietro</button>
             )}
             {step < 5 ? (
-              <button onClick={() => {
-                // Se allo step 4 e dati già presenti → salta step 5, vai ai documenti
-                if (step === 4 && datiPersonaliGiaPresenti) {
-                  preparaStepDocumenti()
-                } else {
-                  avanti()
-                }
-              }}
+              <button
+                onClick={() => {
+                  if (step === 4 && datiPersonaliGiaPresenti) {
+                    preparaStepDocumenti()
+                  } else {
+                    avanti()
+                  }
+                }}
                 disabled={
                   (step === 0 && !dati.idea) ||
                   (step === 1 && !dati.settore) ||
@@ -1396,8 +1323,18 @@ const gestisceZipra = [
                 {step === 4 && datiPersonaliGiaPresenti ? '📄 Vedi documenti →' : 'Continua →'}
               </button>
             ) : (
-              <button onClick={preparaStepDocumenti}
-                disabled={loading || !dati.nome || !dati.cognome || !dati.email || dati.codice_fiscale.length !== 16 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dati.email)}
+              // ── FIX 5: validazione step 5 aggiornata ───────────────────────
+              <button
+                onClick={preparaStepDocumenti}
+                disabled={
+                  loading ||
+                  !dati.nome || !dati.cognome ||
+                  dati.codice_fiscale.length !== 16 ||
+                  !dati.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dati.email) ||
+                  !dati.telefono || dati.telefono.replace(/[\s+]/g, '').length < 9 ||
+                  !dati.data_nascita || !dati.luogo_nascita ||
+                  !dati.via_residenza || !dati.comune_residenza || !dati.cap_residenza
+                }
                 className="btn-primary flex-1 justify-center">
                 📄 Vedi documenti necessari →
               </button>

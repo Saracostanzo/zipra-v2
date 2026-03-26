@@ -21,17 +21,12 @@ const STATI = [
   { id: 'respinta_ente',      label: 'In correzione',       icon: '🔄', color: 'text-orange-400' },
 ]
 
-// Ordine degli stati nella progress bar
 const STATI_PROGRESS = [
-  'bozza',
-  'pagata',
-  'firma_inviata',
-  'in_revisione_admin',
-  'in_lavorazione',
-  'in_invio',
-  'inviata_ente',
-  'completata',
+  'bozza', 'pagata', 'firma_inviata', 'in_revisione_admin',
+  'in_lavorazione', 'in_invio', 'inviata_ente', 'completata',
 ]
+
+const PIANI_ABBONAMENTO = ['base', 'pro', 'mantenimento', 'business', 'business_pro']
 
 function PannelloMantenimento({ pianoAttivo }: { pianoAttivo: boolean }) {
   if (pianoAttivo) return null
@@ -45,9 +40,7 @@ function PannelloMantenimento({ pianoAttivo }: { pianoAttivo: boolean }) {
             notifiche scadenze automatiche e sconto 20% su tutte le pratiche future.
           </p>
         </div>
-        <a href="/prezzi" className="btn-secondary text-xs py-2 px-4 shrink-0 whitespace-nowrap">
-          Scopri →
-        </a>
+        <a href="/prezzi" className="btn-secondary text-xs py-2 px-4 shrink-0 whitespace-nowrap">Scopri →</a>
       </div>
     </div>
   )
@@ -57,11 +50,7 @@ function PraticheCorrrelate({ pratica, pianoAttivo }: { pratica: any, pianoAttiv
   const router = useRouter()
   const praticheSuggerite = CATALOGO.filter(p => {
     if (p.id === 'apertura_ditta' || p.id === 'apertura_srl') return false
-    const correlate = [
-      'variazione_sede', 'variazione_ateco', 'variazione_pec',
-      'suap_modifica', 'deposito_bilancio', 'diritto_annuale',
-      'rinnovo_sanitario', 'cessazione_ditta',
-    ]
+    const correlate = ['variazione_sede', 'variazione_ateco', 'variazione_pec', 'suap_modifica', 'deposito_bilancio', 'diritto_annuale', 'rinnovo_sanitario', 'cessazione_ditta']
     return correlate.includes(p.id)
   }).slice(0, 4)
 
@@ -70,14 +59,8 @@ function PraticheCorrrelate({ pratica, pianoAttivo }: { pratica: any, pianoAttiv
   return (
     <div className="border-t border-white/8 bg-z-darker px-5 py-4">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-mono text-z-muted/50 uppercase tracking-wider">
-          ⚡ Pratiche incluse nel piano
-        </p>
-        {!pianoAttivo && (
-          <a href="/prezzi" className="text-xs text-z-green underline">
-            Attiva abbonamento →
-          </a>
-        )}
+        <p className="text-xs font-mono text-z-muted/50 uppercase tracking-wider">⚡ Pratiche incluse nel piano</p>
+        {!pianoAttivo && <a href="/prezzi" className="text-xs text-z-green underline">Attiva abbonamento →</a>}
       </div>
       {!pianoAttivo && (
         <div className="bg-z-green/5 border border-z-green/15 rounded-xl px-4 py-3 mb-3">
@@ -91,19 +74,12 @@ function PraticheCorrrelate({ pratica, pianoAttivo }: { pratica: any, pianoAttiv
           <button
             key={p.id}
             onClick={() => pianoAttivo ? router.push('/wizard?pratica=' + p.id) : router.push('/prezzi')}
-            className={`flex items-center justify-between gap-2 border rounded-xl px-4 py-3 text-left transition-all group ${
-              pianoAttivo
-                ? 'bg-z-mid hover:bg-z-card border-white/8 hover:border-z-green/30'
-                : 'bg-z-mid/50 border-white/5 opacity-70'
-            }`}
+            className={`flex items-center justify-between gap-2 border rounded-xl px-4 py-3 text-left transition-all group ${pianoAttivo ? 'bg-z-mid hover:bg-z-card border-white/8 hover:border-z-green/30' : 'bg-z-mid/50 border-white/5 opacity-70'}`}
           >
             <div className="flex-1 min-w-0">
               <p className="text-z-light text-sm font-medium truncate">{p.titolo}</p>
               <p className="text-z-muted/50 text-xs mt-0.5">
-                {pianoAttivo
-                  ? (p.dirittiEnti > 0 ? `Solo €${p.dirittiEnti} diritti enti` : 'Completamente gratis')
-                  : `€${p.prezzoZipra} + €${p.dirittiEnti} enti`
-                }
+                {pianoAttivo ? (p.dirittiEnti > 0 ? `Solo €${p.dirittiEnti} diritti enti` : 'Completamente gratis') : `€${p.prezzoZipra} + €${p.dirittiEnti} enti`}
               </p>
             </div>
             <span className={`text-lg shrink-0 transition-colors ${pianoAttivo ? 'text-z-green/50 group-hover:text-z-green' : 'text-z-muted/30'}`}>
@@ -120,16 +96,18 @@ function PannelloDettaglioPratica({
   pratica,
   analisi,
   onDocumentUploaded,
-  isPrimaPratica = false,
+  onStatoAggiornato,
 }: {
   pratica: any
   analisi: any
   onDocumentUploaded: () => void
-  isPrimaPratica?: boolean
+  onStatoAggiornato: () => void
 }) {
   const supabase = createBrowserSupabaseClient()
   const [uploading, setUploading] = useState<string | null>(null)
   const [uploadOk, setUploadOk] = useState<Set<string>>(new Set())
+  const [inviando, setInviando] = useState(false)
+  const [erroreInvio, setErroreInvio] = useState<string | null>(null)
 
   const docDaCaricare: { id: string; nome: string }[] = analisi?.documenti_mancanti ?? []
 
@@ -139,8 +117,8 @@ function PannelloDettaglioPratica({
       { nome: 'SCIA / ComUnica', desc: 'Zipra compila e invia agli enti' },
       { nome: 'Moduli CCIAA', desc: 'Zipra li predispone e invia' },
     ]
-    const attivitaConCasellario = ['taxi', 'ncc', 'autista', 'mediatore', 'agente', 'vigilanza', 'impiantista', 'elettricista', 'autoriparatore', 'meccanico', 'estetista', 'tatuatore']
     const tipo = (pratica.tipo_attivita ?? '').toLowerCase()
+    const attivitaConCasellario = ['taxi', 'ncc', 'autista', 'mediatore', 'agente', 'vigilanza', 'impiantista', 'elettricista', 'autoriparatore', 'meccanico', 'estetista', 'tatuatore']
     if (attivitaConCasellario.some(k => tipo.includes(k))) {
       base.splice(1, 0, { nome: 'Casellario giudiziale', desc: 'Zipra lo richiede al Ministero della Giustizia' })
     }
@@ -163,27 +141,68 @@ function PannelloDettaglioPratica({
       const { error } = await supabase.storage.from('documenti').upload(path, file)
       if (error) { console.error(error); return }
       await supabase.from('documenti').insert({
-        pratica_id: pratica.id,
-        nome: docNome,
-        tipo: 'input_utente',
-        url: path,
-        mime_type: file.type,
-        size: file.size,
+        pratica_id: pratica.id, nome: docNome, tipo: 'input_utente',
+        url: path, mime_type: file.type, size: file.size,
       })
       setUploadOk(prev => new Set(Array.from(prev).concat(docId)))
       onDocumentUploaded()
-    } finally {
-      setUploading(null)
-    }
+    } finally { setUploading(null) }
   }
+
+  // FIX 1 — Invia in revisione
+  const handleInviaRevisione = async () => {
+    setInviando(true)
+    setErroreInvio(null)
+    try {
+      const res = await fetch('/api/pratiche/invia-revisione', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ praticaId: pratica.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Errore invio')
+      onStatoAggiornato()
+    } catch (e: any) {
+      setErroreInvio(e.message)
+    } finally { setInviando(false) }
+  }
+
+  // FIX 2 — Prezzo corretto: singola vs abbonamento
+  const renderPrezzo = () => {
+    const isAbbonamento = PIANI_ABBONAMENTO.includes(pratica.piano)
+    if (!isAbbonamento) {
+      const tipoL = (pratica.tipo_attivita ?? '').toLowerCase()
+      const prezzoSingola = tipoL.includes('srl') ? 299 : 199
+      return (
+        <>
+          <div className="font-bold text-z-green text-lg">€{prezzoSingola}</div>
+          <div className="text-[10px] text-z-muted/50">Pratica singola</div>
+        </>
+      )
+    }
+    if (pratica.piano === 'pro') return (
+      <>
+        <div className="font-bold text-z-green text-lg">€249</div>
+        <div className="text-[10px] text-z-muted/50">Piano Pro / anno</div>
+      </>
+    )
+    return (
+      <>
+        <div className="font-bold text-z-green text-lg">€149</div>
+        <div className="text-[10px] text-z-muted/50">Piano Base / anno</div>
+      </>
+    )
+  }
+
+  const puoInviareRevisione = ['pagata', 'firma_inviata'].includes(pratica.stato)
 
   return (
     <div className="border-t border-white/8 bg-z-darker">
       <div className="p-5 grid md:grid-cols-2 gap-6">
+
+        {/* COLONNA SX — cosa fa Zipra */}
         <div>
-          <div className="text-xs font-mono text-z-green/60 uppercase tracking-wider mb-3">
-            ✨ Zipra gestisce per te
-          </div>
+          <div className="text-xs font-mono text-z-green/60 uppercase tracking-wider mb-3">✨ Zipra gestisce per te</div>
           <div className="space-y-2">
             {docZipra.map(d => (
               <div key={d.nome} className="flex items-start gap-2.5 py-1">
@@ -211,9 +230,7 @@ function PannelloDettaglioPratica({
                   <div>
                     <span className="text-xs font-mono text-z-muted/50 uppercase">Codice ATECO </span>
                     <span className="text-xs font-mono text-z-green/70">{analisi.codice_ateco}</span>
-                    {analisi?.descrizione_ateco && (
-                      <span className="text-xs text-z-muted/50 ml-1">— {analisi.descrizione_ateco}</span>
-                    )}
+                    {analisi?.descrizione_ateco && <span className="text-xs text-z-muted/50 ml-1">— {analisi.descrizione_ateco}</span>}
                   </div>
                 )}
                 {pratica.forma_giuridica && (
@@ -233,10 +250,9 @@ function PannelloDettaglioPratica({
           </div>
         </div>
 
+        {/* COLONNA DX — documenti + prezzo + invio revisione */}
         <div>
-          <div className="text-xs font-mono text-blue-400/60 uppercase tracking-wider mb-3">
-            📎 Documenti da caricare
-          </div>
+          <div className="text-xs font-mono text-blue-400/60 uppercase tracking-wider mb-3">📎 Documenti da caricare</div>
           {docDaCaricare.length === 0 ? (
             <div className="bg-z-green/8 border border-z-green/20 rounded-xl p-4 text-sm text-z-muted">
               <span className="text-z-green font-bold">✓ Tutto pronto!</span> Non mancano documenti.
@@ -258,14 +274,10 @@ function PannelloDettaglioPratica({
                       ) : (
                         <label className="shrink-0 cursor-pointer">
                           <input
-                            type="file"
-                            className="hidden"
+                            type="file" className="hidden"
                             accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                             disabled={uploading === docId}
-                            onChange={e => {
-                              const f = e.target.files?.[0]
-                              if (f) uploadDocumento(docId, doc.nome, f)
-                            }}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadDocumento(docId, doc.nome, f) }}
                           />
                           <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-all ${uploading === docId ? 'bg-white/10 text-z-muted cursor-wait' : 'bg-blue-500/20 border border-blue-500/30 text-blue-300 hover:bg-blue-500/30'}`}>
                             {uploading === docId ? '⏳ Caricamento...' : '📎 Carica'}
@@ -276,38 +288,14 @@ function PannelloDettaglioPratica({
                   </div>
                 )
               })}
-              <p className="text-xs text-z-muted/40 mt-2">
-                Puoi caricare i documenti in qualsiasi momento — non blocca la lavorazione.
-              </p>
+              <p className="text-xs text-z-muted/40 mt-2">Puoi caricare i documenti in qualsiasi momento — non blocca la lavorazione.</p>
             </div>
           )}
 
+          {/* FIX 2: prezzo corretto */}
           <div className="flex gap-3 mt-4">
             <div className="flex-1 bg-z-mid rounded-xl p-3 text-center">
-              {isPrimaPratica ? (
-                pratica.piano === 'pro' ? (
-                  <>
-                    <div className="font-bold text-z-green text-lg">€249</div>
-                    <div className="text-[10px] text-z-muted/50">Piano Pro / anno</div>
-                  </>
-                ) : (
-                  <>
-                    <div className="font-bold text-z-green text-lg">€149</div>
-                    <div className="text-[10px] text-z-muted/50">Piano Base / anno</div>
-                  </>
-                )
-              ) : (
-                (() => {
-                  const tipoL = (pratica.tipo_attivita ?? '').toLowerCase()
-                  const cat = CATALOGO.find(c => tipoL.includes('srl') ? c.id === 'apertura_srl' : c.id === 'apertura_ditta') ?? CATALOGO.find(c => c.id === 'apertura_ditta')
-                  return cat ? (
-                    <div>
-                      <div className="font-bold text-z-green text-lg">€{cat.prezzoZipra + cat.dirittiEnti}</div>
-                      <div className="text-[10px] text-z-muted/50">€{cat.prezzoZipra} Zipra + €{cat.dirittiEnti} enti</div>
-                    </div>
-                  ) : null
-                })()
-              )}
+              {renderPrezzo()}
             </div>
             {analisi?.tempi_totali && (
               <div className="flex-1 bg-z-mid rounded-xl p-3 text-center">
@@ -316,6 +304,20 @@ function PannelloDettaglioPratica({
               </div>
             )}
           </div>
+
+          {/* FIX 1: bottone invia in revisione — appare solo per pagata/firma_inviata */}
+          {puoInviareRevisione && (
+            <div className="mt-3">
+              <button
+                onClick={handleInviaRevisione}
+                disabled={inviando}
+                className="w-full bg-z-green text-z-dark font-bold py-3 rounded-xl hover:opacity-90 transition disabled:opacity-50 text-sm"
+              >
+                {inviando ? '⏳ Invio in corso...' : '📤 Invia pratica in revisione →'}
+              </button>
+              {erroreInvio && <p className="text-xs text-red-400 mt-2">{erroreInvio}</p>}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -330,16 +332,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [praticaAperta, setPraticaAperta] = useState<any>(null)
   const [mostraToastMantenimento, setMostraToastMantenimento] = useState(false)
-  const [toastNuovaPratica, setToastNuovaPratica] = useState(false)
   const [toastTempPassword, setToastTempPassword] = useState<{email: string, password: string} | null>(null)
+  const [verificandoFirma, setVerificandoFirma] = useState(false)
 
   useEffect(() => {
     const raw = sessionStorage.getItem('zipra_temp_password')
     if (raw) {
-      try {
-        setToastTempPassword(JSON.parse(raw))
-        sessionStorage.removeItem('zipra_temp_password')
-      } catch {}
+      try { setToastTempPassword(JSON.parse(raw)); sessionStorage.removeItem('zipra_temp_password') } catch {}
     }
   }, [])
 
@@ -350,25 +349,18 @@ export default function DashboardPage() {
 
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setProfilo(p)
-
       if (p?.piano === 'base') setMostraToastMantenimento(true)
 
       const { data: pr } = await supabase.from('pratiche')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .select('*').eq('user_id', user.id).order('created_at', { ascending: false })
       setPratiche(pr ?? [])
       setLoading(false)
 
       const params = new URLSearchParams(window.location.search)
       const praticaIdParam = params.get('pratica')
-      const nuova = params.get('nuova') === '1'
       if (praticaIdParam && pr) {
         const trovata = pr.find((p: any) => p.id === praticaIdParam)
-        if (trovata) {
-          setPraticaAperta(trovata)
-          if (nuova) setToastNuovaPratica(true)
-        }
+        if (trovata) setPraticaAperta(trovata)
       }
     }
     carica()
@@ -387,10 +379,33 @@ export default function DashboardPage() {
     }
   }
 
-  const getStatoInfo = (stato: string) => STATI.find(s => s.id === stato) ?? { id: stato, label: stato, icon: '📋', color: 'text-z-muted' }
+  // FIX 3 — Verifica firma su Yousign, aggiorna DB, fa sparire il banner automaticamente
+  const verificaFirma = async () => {
+    if (!profilo?.id) return
+    setVerificandoFirma(true)
+    try {
+      const praticaId = pratiche[pratiche.length - 1]?.id
+      const res = await fetch('/api/firma/verifica', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: profilo.id, praticaId }),
+      })
+      const data = await res.json()
+      if (data.firmato) {
+        setProfilo((prev: any) => ({ ...prev, firma_digitale_autorizzata: true }))
+        if (praticaId) caricaDatiPratica(praticaId)
+      } else {
+        alert(data.messaggio ?? 'Firma non ancora completata. Controlla la tua email.')
+      }
+    } catch {
+      alert('Errore di rete. Riprova.')
+    } finally {
+      setVerificandoFirma(false)
+    }
+  }
 
-  // Stati per cui NON mostrare il bottone "Paga"
-  const STATI_PAGATI = ['pagata', 'firma_inviata', 'in_revisione_admin', 'in_lavorazione', 'inviata_utente', 'approvata_utente', 'in_invio', 'inviata_ente', 'completata']
+  const getStatoInfo = (stato: string) =>
+    STATI.find(s => s.id === stato) ?? { id: stato, label: stato, icon: '📋', color: 'text-z-muted' }
 
   if (loading) return (
     <div className="min-h-screen bg-z-darker flex items-center justify-center">
@@ -434,8 +449,7 @@ export default function DashboardPage() {
             <a href="/pratiche" className="text-sm text-z-muted/60 hover:text-z-muted">Servizi</a>
             <a href="/prezzi" className="text-sm text-z-muted/60 hover:text-z-muted">Prezzi</a>
             <span className="text-z-muted/30 text-sm">{profilo?.email}</span>
-            <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }}
-              className="btn-secondary text-xs py-2">Esci</button>
+            <button onClick={async () => { await supabase.auth.signOut(); router.push('/') }} className="btn-secondary text-xs py-2">Esci</button>
             <a href="/dashboard/impostazioni" className="btn-ghost text-xs py-2">⚙️ Impostazioni</a>
           </div>
         </div>
@@ -473,7 +487,7 @@ export default function DashboardPage() {
           <a href="/wizard" className="btn-primary">+ Nuova pratica</a>
         </div>
 
-        {/* Banner firma — usa firma_digitale_autorizzata NON procura_firmata */}
+        {/* FIX 3: Banner firma con "Ho già firmato — verifica" */}
         {pratiche.length > 0 && !profilo?.firma_digitale_autorizzata && (
           <div className="bg-amber-400/8 border border-amber-400/20 rounded-2xl px-5 py-4 flex items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
@@ -485,10 +499,19 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-            <a href={`/onboarding/firma?pratica=${pratiche[pratiche.length - 1]?.id}`}
-              className="btn-primary text-sm py-2 px-4 shrink-0 whitespace-nowrap">
-              ✍️ Firma ora →
-            </a>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={verificaFirma}
+                disabled={verificandoFirma}
+                className="btn-secondary text-xs py-2 px-3 whitespace-nowrap disabled:opacity-50"
+              >
+                {verificandoFirma ? '⏳ Verifica...' : '✅ Ho firmato — verifica'}
+              </button>
+              <a href={`/onboarding/firma?pratica=${pratiche[pratiche.length - 1]?.id}`}
+                className="btn-primary text-sm py-2 px-4 shrink-0 whitespace-nowrap">
+                ✍️ Firma ora →
+              </a>
+            </div>
           </div>
         )}
 
@@ -532,7 +555,6 @@ export default function DashboardPage() {
                         className="btn-secondary text-xs py-2 px-4">
                         📋 Riepilogo
                       </button>
-                      {/* Bottone paga — solo se bozza (non pagata) */}
                       {p.stato === 'bozza' && (
                         <a href={`/checkout?pratica=${p.id}&piano=${p.piano ?? 'base'}`}
                           className="btn-primary text-xs py-2 px-4">
@@ -547,20 +569,14 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* Progress bar con nuovi stati */}
+                  {/* Progress bar */}
                   <div className="px-5 pb-3">
                     <div className="flex items-center gap-1">
-                      {STATI_PROGRESS.map((s, i) => {
-                        const corrente = s === p.stato
-                        const passato = idxCorrente > i
-                        return (
-                          <div key={s} className="flex-1 h-1 rounded transition-all"
-                            style={{
-                              background: corrente ? '#00C48C' : passato ? '#00C48C60' : 'rgba(255,255,255,0.08)'
-                            }}
-                          />
-                        )
-                      })}
+                      {STATI_PROGRESS.map((s, i) => (
+                        <div key={s} className="flex-1 h-1 rounded transition-all"
+                          style={{ background: s === p.stato ? '#00C48C' : idxCorrente > i ? '#00C48C60' : 'rgba(255,255,255,0.08)' }}
+                        />
+                      ))}
                     </div>
                     <div className="flex justify-between mt-1">
                       <span className="text-[9px] text-z-muted/30">Bozza</span>
@@ -573,15 +589,12 @@ export default function DashboardPage() {
                       pratica={p}
                       analisi={analisi}
                       onDocumentUploaded={() => caricaDatiPratica(p.id)}
-                      isPrimaPratica={pratiche.indexOf(p) === pratiche.length - 1}
+                      onStatoAggiornato={() => caricaDatiPratica(p.id)}
                     />
                   )}
 
                   {pratiche.indexOf(p) === pratiche.length - 1 ? (
-                    <PraticheCorrrelate
-                      pratica={p}
-                      pianoAttivo={profilo?.piano === 'base' || profilo?.piano === 'pro'}
-                    />
+                    <PraticheCorrrelate pratica={p} pianoAttivo={profilo?.piano === 'base' || profilo?.piano === 'pro'} />
                   ) : (
                     <PannelloMantenimento pianoAttivo={profilo?.piano === 'mantenimento' || profilo?.piano === 'pro'} />
                   )}
@@ -600,8 +613,7 @@ export default function DashboardPage() {
                 { icon: '📥', label: 'Ricevute', count: pratiche.filter(p => p.stato === 'completata').length, link: '#' },
                 { icon: '📁', label: 'Documenti', count: 0, link: '#' },
               ].map(({ icon, label, count, link }) => (
-                <a key={label} href={link}
-                  className="bg-z-mid border border-white/8 p-5 hover:border-white/20 transition-all text-center">
+                <a key={label} href={link} className="bg-z-mid border border-white/8 p-5 hover:border-white/20 transition-all text-center">
                   <div className="text-3xl mb-2">{icon}</div>
                   <div className="font-bold text-z-light text-2xl">{count}</div>
                   <div className="text-xs text-z-muted mt-1">{label}</div>
