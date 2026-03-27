@@ -391,7 +391,8 @@ export async function pubblicaSuVercel(
         target: "production",
       }),
     });
-    const data = await res.json();
+   const data = await res.json();
+    console.log('[Vercel deploy] status:', res.status, 'response:', JSON.stringify(data).slice(0, 500));
     return data.url ? `https://${data.url}` : null;
   } catch (e) {
     console.error("Vercel deploy error:", e);
