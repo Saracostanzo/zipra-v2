@@ -1,13 +1,9 @@
 'use client'
 // PATH: src/components/PannelloGeneraSito.tsx
-//
-// Componente condiviso per generare siti vetrina.
-// Usato da:
-//   1. Dashboard utente Piano Pro
-//   2. Dashboard Business/commercialista per i propri clienti
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { createBrowserSupabaseClient } from '@/lib/supabase/browser'
 
 interface Props {
   pratiche: any[]
@@ -29,6 +25,7 @@ export default function PannelloGeneraSito({
   onSitoGenerato,
 }: Props) {
   const router = useRouter()
+  const supabase = createBrowserSupabaseClient()
   const [praticaSelezionata, setPraticaSelezionata] = useState<any>(null)
   const [generando, setGenerando] = useState<string | null>(null)
   const [sitiGenerati, setSitiGenerati] = useState<Record<string, string>>({})
@@ -40,6 +37,23 @@ export default function PannelloGeneraSito({
     indirizzo: '',
     orari: '',
   })
+
+  // Carica siti già esistenti al mount — evita di mostrare "Genera" se già generato
+  useEffect(() => {
+    const caricaSitiEsistenti = async () => {
+      const { data } = await supabase
+        .from('siti_vetrina')
+        .select('id, pratica_id, stato')
+        .eq('user_id', targetUserId)
+        .in('stato', ['generazione', 'revisione', 'pubblicato'])
+      if (data) {
+        const map: Record<string, string> = {}
+        data.forEach(s => { if (s.pratica_id) map[s.pratica_id] = s.id })
+        setSitiGenerati(map)
+      }
+    }
+    caricaSitiEsistenti()
+  }, [targetUserId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const praticheAttive = pratiche.filter(p =>
     ['pagata', 'firma_inviata', 'in_revisione_admin', 'in_lavorazione', 'inviata_ente', 'completata'].includes(p.stato)
@@ -83,16 +97,13 @@ export default function PannelloGeneraSito({
 
       if (!res.ok) {
         alert(data.error ?? 'Errore generazione sito.')
-        setGenerando(null)
         return
       }
 
       if (data.sitoId) {
         setSitiGenerati(prev => ({ ...prev, [praticaId]: data.sitoId }))
         onSitoGenerato?.(data.sitoId, praticaId)
-        if (!businessId) {
-          router.push(`/dashboard/sito/${data.sitoId}`)
-        }
+        if (!businessId) router.push(`/dashboard/sito/${data.sitoId}`)
       } else {
         alert('Errore: sitoId non ricevuto dal server.')
       }
@@ -111,7 +122,7 @@ export default function PannelloGeneraSito({
 
   return (
     <>
-      {/* ── Modal raccolta dati ── */}
+      {/* Modal raccolta dati */}
       {praticaSelezionata && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
           <div className="bg-z-card border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -126,122 +137,83 @@ export default function PannelloGeneraSito({
                     {nomeCliente && ` · ${nomeCliente}`}
                   </p>
                 </div>
-                <button
-                  onClick={() => setPraticaSelezionata(null)}
-                  className="text-z-muted/40 hover:text-z-muted text-2xl leading-none ml-4 shrink-0"
-                >×</button>
+                <button onClick={() => setPraticaSelezionata(null)}
+                  className="text-z-muted/40 hover:text-z-muted text-2xl leading-none ml-4 shrink-0">×</button>
               </div>
 
               <p className="text-z-muted text-sm mb-5">
                 Dimmi qualcosa sulla tua attività — l'AI genererà testi, logo e layout su misura.
-                Più informazioni dai, più il sito sarà personalizzato.
               </p>
 
               <div className="space-y-4">
                 <div>
                   <label className="label-field">Descrivi l'attività *</label>
-                  <textarea
-                    value={form.descrizione}
+                  <textarea value={form.descrizione}
                     onChange={e => setForm(p => ({ ...p, descrizione: e.target.value }))}
                     placeholder={`Es: Siamo ${praticaSelezionata.nome_impresa}, un'attività di ${(praticaSelezionata.tipo_attivita ?? 'servizi').toLowerCase()} a ${praticaSelezionata.comune_sede}. Offriamo...`}
-                    className="input-field min-h-[90px] resize-none text-sm"
-                    autoFocus
-                  />
+                    className="input-field min-h-[90px] resize-none text-sm" autoFocus />
                 </div>
-
                 <div>
                   <label className="label-field">Servizi principali (uno per riga)</label>
-                  <textarea
-                    value={form.servizi}
+                  <textarea value={form.servizi}
                     onChange={e => setForm(p => ({ ...p, servizi: e.target.value }))}
                     placeholder={`Es:\nServizio 1\nServizio 2\nServizio 3`}
-                    className="input-field min-h-[80px] resize-none text-sm font-mono"
-                  />
+                    className="input-field min-h-[80px] resize-none text-sm font-mono" />
                 </div>
-
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="label-field">Telefono</label>
-                    <input
-                      value={form.telefono}
-                      onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
-                      placeholder="+39 333 1234567"
-                      className="input-field text-sm"
-                    />
+                    <input value={form.telefono} onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
+                      placeholder="+39 333 1234567" className="input-field text-sm" />
                   </div>
                   <div>
                     <label className="label-field">Email contatti</label>
-                    <input
-                      value={form.email}
-                      onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                      placeholder="info@impresa.it"
-                      className="input-field text-sm"
-                    />
+                    <input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                      placeholder="info@impresa.it" className="input-field text-sm" />
                   </div>
                 </div>
-
                 <div>
                   <label className="label-field">Indirizzo</label>
-                  <input
-                    value={form.indirizzo}
-                    onChange={e => setForm(p => ({ ...p, indirizzo: e.target.value }))}
-                    placeholder={`Via Roma 10, ${praticaSelezionata.comune_sede}`}
-                    className="input-field text-sm"
-                  />
+                  <input value={form.indirizzo} onChange={e => setForm(p => ({ ...p, indirizzo: e.target.value }))}
+                    placeholder={`Via Roma 10, ${praticaSelezionata.comune_sede}`} className="input-field text-sm" />
                 </div>
-
                 <div>
                   <label className="label-field">Orari di apertura</label>
-                  <input
-                    value={form.orari}
-                    onChange={e => setForm(p => ({ ...p, orari: e.target.value }))}
-                    placeholder="Es: Lun-Sab 9:00-19:00, Dom chiuso"
-                    className="input-field text-sm"
-                  />
+                  <input value={form.orari} onChange={e => setForm(p => ({ ...p, orari: e.target.value }))}
+                    placeholder="Es: Lun-Sab 9:00-19:00, Dom chiuso" className="input-field text-sm" />
                 </div>
               </div>
 
               <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setPraticaSelezionata(null)}
-                  className="btn-secondary flex-1 justify-center text-sm"
-                >
+                <button onClick={() => setPraticaSelezionata(null)} className="btn-secondary flex-1 justify-center text-sm">
                   Annulla
                 </button>
-                <button
-                  onClick={generaSito}
-                  disabled={!form.descrizione.trim()}
-                  className="btn-primary flex-1 justify-center text-sm disabled:opacity-50"
-                >
+                <button onClick={generaSito} disabled={!form.descrizione.trim()}
+                  className="btn-primary flex-1 justify-center text-sm disabled:opacity-50">
                   🚀 Genera sito →
                 </button>
               </div>
-
               <p className="text-xs text-z-muted/40 text-center mt-3">
                 La generazione richiede 2-3 minuti.{' '}
-                {businessId
-                  ? 'Il cliente riceverà una email quando è pronto.'
-                  : 'Riceverai una email quando il sito è online.'}
+                {businessId ? 'Il cliente riceverà una email quando è pronto.' : 'Riceverai una email quando il sito è online.'}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Titolo pannello (solo Piano Pro, non Business) ── */}
+      {/* Titolo pannello */}
       {mostraTitoloPannello && (
         <div className="flex items-center gap-3 mb-4">
           <span className="text-2xl">⭐</span>
           <div>
             <h2 className="font-head font-bold text-z-light text-xl">Funzioni Piano Pro</h2>
-            <p className="text-z-muted text-xs mt-0.5">
-              Sito web, logo AI e Google Business inclusi nel tuo abbonamento
-            </p>
+            <p className="text-z-muted text-xs mt-0.5">Sito web, logo AI e Google Business inclusi nel tuo abbonamento</p>
           </div>
         </div>
       )}
 
-      {/* ── Lista pratiche ── */}
+      {/* Lista pratiche */}
       <div className="space-y-3">
         {praticheAttive.map(p => {
           const sitoId = sitiGenerati[p.id]
@@ -265,20 +237,14 @@ export default function PannelloGeneraSito({
                 )}
 
                 {!sitoId && !staGenerando && (
-                  <button
-                    onClick={() => apriForm(p)}
-                    className="btn-primary text-xs py-2 px-4 shrink-0"
-                  >
+                  <button onClick={() => apriForm(p)} className="btn-primary text-xs py-2 px-4 shrink-0">
                     🌐 Genera sito + logo + Google Business
                   </button>
                 )}
 
                 {sitoId && !staGenerando && (
-                  <a
-                    href={`/dashboard/sito/${sitoId}`}
-                    target={businessId ? '_blank' : undefined}
-                    className="btn-secondary text-xs py-2 px-4 shrink-0"
-                  >
+                  <a href={`/dashboard/sito/${sitoId}`} target={businessId ? '_blank' : undefined}
+                    className="btn-secondary text-xs py-2 px-4 shrink-0">
                     ✏️ Gestisci sito →
                   </a>
                 )}
@@ -290,19 +256,17 @@ export default function PannelloGeneraSito({
                   <p>✍️ Scrittura testi ottimizzati per SEO locale...</p>
                   <p>🌐 Pubblicazione sito su dominio dedicato...</p>
                   <p>📍 Preparazione guida Google Business Profile...</p>
-                  <p className="text-z-muted/40 mt-2">
-                    Riceverai una email quando è pronto — puoi navigare liberamente.
-                  </p>
+                  <p className="text-z-muted/40 mt-2">Riceverai una email quando è pronto — puoi navigare liberamente.</p>
                 </div>
               )}
 
               {sitoId && !staGenerando && (
                 <div className="mt-3 bg-z-green/8 border border-z-green/20 rounded-xl px-4 py-3">
-                  <p className="text-z-green text-xs font-bold">✅ Sito in generazione!</p>
+                  <p className="text-z-green text-xs font-bold">✅ Sito generato!</p>
                   <p className="text-z-muted/60 text-xs mt-0.5">
                     {businessId
                       ? 'Il cliente riceverà una email con il link al sito e la guida Google Business.'
-                      : 'Riceverai una email quando il sito è online. Puoi monitorare lo stato qui.'}
+                      : 'Riceverai una email quando il sito è online. Clicca "Gestisci sito" per monitorare lo stato.'}
                   </p>
                 </div>
               )}
