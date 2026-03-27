@@ -1,6 +1,5 @@
 'use client'
 // PATH: src/app/auth/reset-password/page.tsx
-// Supabase redirige qui dopo che l'utente clicca il link nell'email di recupero
 
 import { useState, useEffect } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser'
@@ -14,32 +13,32 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [errore, setErrore] = useState('')
   const [successo, setSuccesso] = useState(false)
-  const [sessioneValida, setSessioneValida] = useState(false)
+  const [pronto, setPronto] = useState(false)
 
   useEffect(() => {
-    // Supabase gestisce automaticamente il token dall'URL
-    // Aspetta che la sessione sia disponibile
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setSessioneValida(true)
-      else setErrore('Link non valido o scaduto. Richiedi un nuovo link di recupero.')
-    })
+    const code = new URLSearchParams(window.location.search).get('code')
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        if (error) setErrore('Link non valido o scaduto. Richiedine uno nuovo.')
+        else setPronto(true)
+      })
+    } else {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) setPronto(true)
+        else setErrore('Link non valido o scaduto. Richiedine uno nuovo.')
+      })
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleReset = async () => {
     setErrore('')
     if (nuovaPassword.length < 8) { setErrore('La password deve avere almeno 8 caratteri'); return }
     if (nuovaPassword !== conferma) { setErrore('Le password non coincidono'); return }
-
     setLoading(true)
     const { error } = await supabase.auth.updateUser({ password: nuovaPassword })
     setLoading(false)
-
-    if (error) {
-      setErrore('Errore: ' + error.message)
-    } else {
-      setSuccesso(true)
-      setTimeout(() => router.push('/dashboard'), 2500)
-    }
+    if (error) setErrore('Errore: ' + error.message)
+    else { setSuccesso(true); setTimeout(() => router.push('/dashboard'), 2500) }
   }
 
   return (
@@ -48,7 +47,6 @@ export default function ResetPasswordPage() {
         <div className="text-center mb-8">
           <a href="/" className="font-head text-3xl font-bold text-z-light">zipra ⚡</a>
         </div>
-
         <div className="bg-z-mid border border-white/8 p-8">
           {successo ? (
             <div className="text-center">
@@ -60,52 +58,36 @@ export default function ResetPasswordPage() {
             <>
               <h2 className="font-head font-bold text-xl text-z-light mb-2">Nuova password</h2>
               <p className="text-z-muted text-sm mb-6">Scegli una password sicura per il tuo account Zipra.</p>
-
               {errore && (
                 <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm p-3 mb-4">
                   {errore}
-                  {!sessioneValida && (
-                    <div className="mt-2">
-                      <a href="/auth/login" className="text-red-400 underline text-xs">
-                        Torna al login →
-                      </a>
-                    </div>
-                  )}
+                  <div className="mt-2"><a href="/auth/login" className="text-red-400 underline text-xs">← Torna al login</a></div>
                 </div>
               )}
-
-              {sessioneValida && (
+              {!pronto && !errore && (
+                <div className="text-center py-4">
+                  <div className="w-8 h-8 border-2 border-z-green/30 border-t-z-green rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-z-muted text-sm">Verifica del link in corso...</p>
+                </div>
+              )}
+              {pronto && (
                 <div className="space-y-4">
                   <div>
                     <label className="label-field">Nuova password</label>
-                    <input
-                      type="password"
-                      value={nuovaPassword}
-                      onChange={e => setNuovaPassword(e.target.value)}
-                      placeholder="Minimo 8 caratteri"
-                      className="input-field"
-                      autoFocus
-                    />
+                    <input type="password" value={nuovaPassword} onChange={e => setNuovaPassword(e.target.value)}
+                      placeholder="Minimo 8 caratteri" className="input-field" autoFocus />
                   </div>
                   <div>
                     <label className="label-field">Conferma password</label>
-                    <input
-                      type="password"
-                      value={conferma}
-                      onChange={e => setConferma(e.target.value)}
-                      placeholder="Ripeti la password"
-                      className="input-field"
-                      onKeyDown={e => e.key === 'Enter' && handleReset()}
-                    />
+                    <input type="password" value={conferma} onChange={e => setConferma(e.target.value)}
+                      placeholder="Ripeti la password" className="input-field"
+                      onKeyDown={e => e.key === 'Enter' && handleReset()} />
                   </div>
-                  {nuovaPassword.length > 0 && nuovaPassword !== conferma && (
+                  {nuovaPassword.length > 0 && conferma.length > 0 && nuovaPassword !== conferma && (
                     <p className="text-xs text-red-400">Le password non coincidono</p>
                   )}
-                  <button
-                    onClick={handleReset}
-                    disabled={loading || !sessioneValida}
-                    className="btn-primary w-full justify-center py-3 disabled:opacity-50"
-                  >
+                  <button onClick={handleReset} disabled={loading}
+                    className="btn-primary w-full justify-center py-3 disabled:opacity-50">
                     {loading ? '⏳ Salvataggio...' : '🔐 Imposta nuova password'}
                   </button>
                 </div>
