@@ -386,7 +386,7 @@ export async function pubblicaSuVercel(
       },
       body: JSON.stringify({
         name: `zipra-sito-${slugProgetto}`,
-        files: [{ file: "index.html", data: html, encoding: "utf8" }],
+       files: [{ file: "index.html", data: html, encoding: "utf-8" }],
         projectSettings: { framework: null },
         target: "production",
       }),
