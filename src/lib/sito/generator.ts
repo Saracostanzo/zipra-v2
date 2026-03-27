@@ -389,6 +389,7 @@ export async function pubblicaSuVercel(
        files: [{ file: "index.html", data: html, encoding: "utf-8" }],
         projectSettings: { framework: null },
         target: "production",
+         public: true,
       }),
     });
    const data = await res.json();
