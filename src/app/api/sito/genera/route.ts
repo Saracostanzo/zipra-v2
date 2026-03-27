@@ -12,6 +12,7 @@
 // Ritorna: { sitoId, stato: 'generazione' }
 
 import { NextRequest, NextResponse } from 'next/server'
+import { waitUntil } from '@vercel/functions'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { inviaNotifica } from '@/lib/notifications/service'
@@ -110,15 +111,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Errore interno creazione sito' }, { status: 500 })
   }
 
-  // ── Avvia generazione in background (non blocca la risposta) ─────────────
-  generaInBackground({
-    sitoId: sito.id,
-    targetUserId,
-    businessId: businessId ?? null,
-    pratica,
-    datiManuali: datiManuali ?? {},
-    admin,
-  }).catch(e => console.error('[sito/genera] Errore background:', e?.message))
+  // ── waitUntil mantiene vivo il processo Vercel dopo la risposta ───────────
+  waitUntil(
+    generaInBackground({
+      sitoId: sito.id,
+      targetUserId,
+      businessId: businessId ?? null,
+      pratica,
+      datiManuali: datiManuali ?? {},
+      admin,
+    }).catch(e => console.error('[sito/genera] Errore background:', e?.message))
+  )
 
   // Risponde subito con il sitoId — il client naviga a /dashboard/sito/[id]
   return NextResponse.json({ sitoId: sito.id, stato: 'generazione' })

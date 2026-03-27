@@ -1,16 +1,10 @@
 'use client'
 // PATH: src/components/PannelloGeneraSito.tsx
 //
-// Componente condiviso per generare sito vetrina, usato da:
-//   1. Dashboard cliente Piano Pro → PannelloProFeatures nella dashboard
-//   2. Dashboard business/commercialista → per i propri clienti
-//
-// Props:
-//   pratiche     — lista pratiche del cliente target
-//   targetUserId — userId del cliente per cui si genera il sito
-//   businessId   — se presente, è il commercialista che genera per il cliente
-//   nomeCliente  — per mostrare il nome nella UI (es. "Mario Rossi")
-//   modaleTitolo — titolo del modal (es. "Crea sito per Mario Rossi")
+// Componente condiviso per generare siti vetrina.
+// Usato da:
+//   1. Dashboard utente Piano Pro
+//   2. Dashboard Business/commercialista per i propri clienti
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -18,8 +12,8 @@ import { useRouter } from 'next/navigation'
 interface Props {
   pratiche: any[]
   targetUserId: string
-  businessId?: string          // se business sta generando per un cliente
-  nomeCliente?: string         // es. "Mario Rossi" o nome impresa
+  businessId?: string
+  nomeCliente?: string
   modaleTitolo?: string
   mostraTitoloPannello?: boolean
   onSitoGenerato?: (sitoId: string, praticaId: string) => void
@@ -35,9 +29,9 @@ export default function PannelloGeneraSito({
   onSitoGenerato,
 }: Props) {
   const router = useRouter()
+  const [praticaSelezionata, setPraticaSelezionata] = useState<any>(null)
   const [generando, setGenerando] = useState<string | null>(null)
   const [sitiGenerati, setSitiGenerati] = useState<Record<string, string>>({})
-  const [praticaSelezionata, setPraticaSelezionata] = useState<any>(null)
   const [form, setForm] = useState({
     descrizione: '',
     servizi: '',
@@ -59,8 +53,8 @@ export default function PannelloGeneraSito({
   const generaSito = async () => {
     if (!praticaSelezionata) return
     const praticaId = praticaSelezionata.id
-    setGenerando(praticaId)
     setPraticaSelezionata(null)
+    setGenerando(praticaId)
 
     try {
       const res = await fetch('/api/sito/genera', {
@@ -68,15 +62,15 @@ export default function PannelloGeneraSito({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           praticaId,
-          clienteUserId: targetUserId,   // il cliente target
-          businessId: businessId ?? null, // se business, chi genera
+          clienteUserId: targetUserId,
+          businessId: businessId ?? null,
           datiManuali: {
             nomeImpresa: praticaSelezionata.nome_impresa,
             settore: praticaSelezionata.tipo_attivita ?? '',
             comuneSede: praticaSelezionata.comune_sede,
-            provinciaSede: praticaSelezionata.provincia_sede,
+            provinciaSede: praticaSelezionata.provincia_sede ?? '',
             descrizione: form.descrizione,
-            servizi: form.servizi.split('\n').map(s => s.trim()).filter(Boolean),
+            servizi: form.servizi.split('\n').map((s: string) => s.trim()).filter(Boolean),
             telefono: form.telefono,
             email: form.email,
             indirizzo: form.indirizzo,
@@ -89,49 +83,58 @@ export default function PannelloGeneraSito({
 
       if (!res.ok) {
         alert(data.error ?? 'Errore generazione sito.')
+        setGenerando(null)
         return
       }
 
       if (data.sitoId) {
         setSitiGenerati(prev => ({ ...prev, [praticaId]: data.sitoId }))
         onSitoGenerato?.(data.sitoId, praticaId)
-        // Naviga alla pagina sito solo se non è un business che gestisce cliente
-        if (!businessId) router.push(`/dashboard/sito/${data.sitoId}`)
+        if (!businessId) {
+          router.push(`/dashboard/sito/${data.sitoId}`)
+        }
+      } else {
+        alert('Errore: sitoId non ricevuto dal server.')
       }
+    } catch (e: any) {
+      alert('Errore di rete: ' + e.message)
     } finally {
       setGenerando(null)
     }
   }
 
   if (praticheAttive.length === 0) return (
-    <div className="text-center py-8 text-z-muted/50 text-sm">
-      Nessuna pratica attiva. Il cliente deve avere almeno una pratica pagata.
+    <div className="text-center py-6 text-z-muted/50 text-sm">
+      Nessuna pratica attiva — il cliente deve avere almeno una pratica pagata per generare il sito.
     </div>
   )
 
   return (
-    <div>
-      {/* Modal raccolta dati */}
+    <>
+      {/* ── Modal raccolta dati ── */}
       {praticaSelezionata && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
           <div className="bg-z-card border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-start justify-between mb-4">
                 <div>
                   <h2 className="font-head font-bold text-z-light text-lg">
-                    {modaleTitolo ?? 'Crea sito web'}
+                    {modaleTitolo ?? 'Crea il tuo sito web'}
                   </h2>
-                  <p className="text-z-muted text-xs mt-0.5">
+                  <p className="text-z-muted text-xs mt-1">
                     {praticaSelezionata.nome_impresa} · {praticaSelezionata.comune_sede}
-                    {nomeCliente && <span className="ml-1">· Cliente: {nomeCliente}</span>}
+                    {nomeCliente && ` · ${nomeCliente}`}
                   </p>
                 </div>
-                <button onClick={() => setPraticaSelezionata(null)} className="text-z-muted/40 hover:text-z-muted text-2xl leading-none">×</button>
+                <button
+                  onClick={() => setPraticaSelezionata(null)}
+                  className="text-z-muted/40 hover:text-z-muted text-2xl leading-none ml-4 shrink-0"
+                >×</button>
               </div>
 
               <p className="text-z-muted text-sm mb-5">
-                Più informazioni fornisci, più il sito sarà personalizzato.
-                L'AI userà questi dati per generare testi, scegliere i colori e ottimizzare per Google.
+                Dimmi qualcosa sulla tua attività — l'AI genererà testi, logo e layout su misura.
+                Più informazioni dai, più il sito sarà personalizzato.
               </p>
 
               <div className="space-y-4">
@@ -140,13 +143,14 @@ export default function PannelloGeneraSito({
                   <textarea
                     value={form.descrizione}
                     onChange={e => setForm(p => ({ ...p, descrizione: e.target.value }))}
-                    placeholder={`Es: ${praticaSelezionata.nome_impresa} è un/a ${praticaSelezionata.tipo_attivita?.toLowerCase() ?? 'attività'} a ${praticaSelezionata.comune_sede}. Offriamo...`}
+                    placeholder={`Es: Siamo ${praticaSelezionata.nome_impresa}, un'attività di ${(praticaSelezionata.tipo_attivita ?? 'servizi').toLowerCase()} a ${praticaSelezionata.comune_sede}. Offriamo...`}
                     className="input-field min-h-[90px] resize-none text-sm"
+                    autoFocus
                   />
                 </div>
 
                 <div>
-                  <label className="label-field">Servizi offerti (uno per riga)</label>
+                  <label className="label-field">Servizi principali (uno per riga)</label>
                   <textarea
                     value={form.servizi}
                     onChange={e => setForm(p => ({ ...p, servizi: e.target.value }))}
@@ -158,31 +162,52 @@ export default function PannelloGeneraSito({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="label-field">Telefono</label>
-                    <input value={form.telefono} onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
-                      placeholder="+39 333 1234567" className="input-field text-sm" />
+                    <input
+                      value={form.telefono}
+                      onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))}
+                      placeholder="+39 333 1234567"
+                      className="input-field text-sm"
+                    />
                   </div>
                   <div>
                     <label className="label-field">Email contatti</label>
-                    <input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                      placeholder="info@impresa.it" className="input-field text-sm" />
+                    <input
+                      value={form.email}
+                      onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                      placeholder="info@impresa.it"
+                      className="input-field text-sm"
+                    />
                   </div>
                 </div>
 
                 <div>
                   <label className="label-field">Indirizzo</label>
-                  <input value={form.indirizzo} onChange={e => setForm(p => ({ ...p, indirizzo: e.target.value }))}
-                    placeholder={`Via Roma 10, ${praticaSelezionata.comune_sede}`} className="input-field text-sm" />
+                  <input
+                    value={form.indirizzo}
+                    onChange={e => setForm(p => ({ ...p, indirizzo: e.target.value }))}
+                    placeholder={`Via Roma 10, ${praticaSelezionata.comune_sede}`}
+                    className="input-field text-sm"
+                  />
                 </div>
 
                 <div>
                   <label className="label-field">Orari di apertura</label>
-                  <input value={form.orari} onChange={e => setForm(p => ({ ...p, orari: e.target.value }))}
-                    placeholder="Es: Lun-Sab 9:00-19:00, Dom chiuso" className="input-field text-sm" />
+                  <input
+                    value={form.orari}
+                    onChange={e => setForm(p => ({ ...p, orari: e.target.value }))}
+                    placeholder="Es: Lun-Sab 9:00-19:00, Dom chiuso"
+                    className="input-field text-sm"
+                  />
                 </div>
               </div>
 
               <div className="flex gap-3 mt-6">
-                <button onClick={() => setPraticaSelezionata(null)} className="btn-secondary flex-1 justify-center text-sm">Annulla</button>
+                <button
+                  onClick={() => setPraticaSelezionata(null)}
+                  className="btn-secondary flex-1 justify-center text-sm"
+                >
+                  Annulla
+                </button>
                 <button
                   onClick={generaSito}
                   disabled={!form.descrizione.trim()}
@@ -191,26 +216,32 @@ export default function PannelloGeneraSito({
                   🚀 Genera sito →
                 </button>
               </div>
+
               <p className="text-xs text-z-muted/40 text-center mt-3">
-                La generazione richiede 2-3 minuti. {businessId ? 'Il cliente riceverà una email.' : 'Riceverai una email quando è pronto.'}
+                La generazione richiede 2-3 minuti.{' '}
+                {businessId
+                  ? 'Il cliente riceverà una email quando è pronto.'
+                  : 'Riceverai una email quando il sito è online.'}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Titolo pannello */}
-      {mostraTitoloPannello && !businessId && (
+      {/* ── Titolo pannello (solo Piano Pro, non Business) ── */}
+      {mostraTitoloPannello && (
         <div className="flex items-center gap-3 mb-4">
           <span className="text-2xl">⭐</span>
           <div>
             <h2 className="font-head font-bold text-z-light text-xl">Funzioni Piano Pro</h2>
-            <p className="text-z-muted text-xs mt-0.5">Sito web, logo AI e Google Business inclusi</p>
+            <p className="text-z-muted text-xs mt-0.5">
+              Sito web, logo AI e Google Business inclusi nel tuo abbonamento
+            </p>
           </div>
         </div>
       )}
 
-      {/* Lista pratiche */}
+      {/* ── Lista pratiche ── */}
       <div className="space-y-3">
         {praticheAttive.map(p => {
           const sitoId = sitiGenerati[p.id]
@@ -221,25 +252,33 @@ export default function PannelloGeneraSito({
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-z-light text-sm truncate">{p.nome_impresa}</h3>
-                  <p className="text-z-muted/60 text-xs mt-0.5">{p.comune_sede} ({p.provincia_sede})</p>
+                  <p className="text-z-muted/60 text-xs mt-0.5">
+                    {p.comune_sede}{p.provincia_sede ? ` (${p.provincia_sede})` : ''}
+                  </p>
                 </div>
 
                 {staGenerando && (
                   <div className="flex items-center gap-2 text-xs text-amber-400 shrink-0">
                     <div className="w-3 h-3 border border-amber-400/40 border-t-amber-400 rounded-full animate-spin" />
-                    In generazione...
+                    Generazione...
                   </div>
                 )}
 
                 {!sitoId && !staGenerando && (
-                  <button onClick={() => apriForm(p)} className="btn-primary text-xs py-2 px-4 shrink-0">
-                    🌐 Genera sito
+                  <button
+                    onClick={() => apriForm(p)}
+                    className="btn-primary text-xs py-2 px-4 shrink-0"
+                  >
+                    🌐 Genera sito + logo + Google Business
                   </button>
                 )}
 
                 {sitoId && !staGenerando && (
-                  <a href={`/dashboard/sito/${sitoId}`} target={businessId ? '_blank' : undefined}
-                    className="btn-secondary text-xs py-2 px-4 shrink-0">
+                  <a
+                    href={`/dashboard/sito/${sitoId}`}
+                    target={businessId ? '_blank' : undefined}
+                    className="btn-secondary text-xs py-2 px-4 shrink-0"
+                  >
                     ✏️ Gestisci sito →
                   </a>
                 )}
@@ -247,20 +286,23 @@ export default function PannelloGeneraSito({
 
               {staGenerando && (
                 <div className="mt-4 bg-z-darker rounded-xl p-4 space-y-1 text-xs text-z-muted/60">
-                  <p>🎨 Generazione logo AI...</p>
-                  <p>✍️ Scrittura testi SEO ottimizzati...</p>
-                  <p>🌐 Pubblicazione sito...</p>
-                  <p>📍 Preparazione guida Google Business...</p>
+                  <p>🎨 Generazione logo AI con i colori del brand...</p>
+                  <p>✍️ Scrittura testi ottimizzati per SEO locale...</p>
+                  <p>🌐 Pubblicazione sito su dominio dedicato...</p>
+                  <p>📍 Preparazione guida Google Business Profile...</p>
+                  <p className="text-z-muted/40 mt-2">
+                    Riceverai una email quando è pronto — puoi navigare liberamente.
+                  </p>
                 </div>
               )}
 
               {sitoId && !staGenerando && (
                 <div className="mt-3 bg-z-green/8 border border-z-green/20 rounded-xl px-4 py-3">
-                  <p className="text-z-green text-xs font-bold">✅ Sito generato!</p>
+                  <p className="text-z-green text-xs font-bold">✅ Sito in generazione!</p>
                   <p className="text-z-muted/60 text-xs mt-0.5">
                     {businessId
-                      ? 'Il cliente ha ricevuto una email con il link al sito e la guida Google Business.'
-                      : 'Il sito è online. Hai ricevuto anche la guida per Google Business via email.'}
+                      ? 'Il cliente riceverà una email con il link al sito e la guida Google Business.'
+                      : 'Riceverai una email quando il sito è online. Puoi monitorare lo stato qui.'}
                   </p>
                 </div>
               )}
@@ -284,6 +326,6 @@ export default function PannelloGeneraSito({
           )
         })}
       </div>
-    </div>
+    </>
   )
 }
