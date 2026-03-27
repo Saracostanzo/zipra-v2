@@ -1,6 +1,4 @@
 'use client'
-// PATH: src/app/auth/reset-password/page.tsx
-
 import { useState, useEffect } from 'react'
 import { createBrowserSupabaseClient } from '@/lib/supabase/browser'
 import { useRouter } from 'next/navigation'
@@ -17,17 +15,27 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('code')
+
     if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-        if (error) setErrore('Link non valido o scaduto. Richiedine uno nuovo.')
-        else setPronto(true)
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        if (error || !data.session) {
+          setErrore('Link non valido o scaduto. Richiedine uno nuovo.')
+        } else {
+          setPronto(true)
+        }
       })
-    } else {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) setPronto(true)
-        else setErrore('Link non valido o scaduto. Richiedine uno nuovo.')
-      })
+      return
     }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setPronto(true)
+    })
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setPronto(true)
+    })
+
+    return () => subscription.unsubscribe()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleReset = async () => {
@@ -38,7 +46,7 @@ export default function ResetPasswordPage() {
     const { error } = await supabase.auth.updateUser({ password: nuovaPassword })
     setLoading(false)
     if (error) setErrore('Errore: ' + error.message)
-    else { setSuccesso(true); setTimeout(() => router.push('/dashboard'), 2500) }
+    else { setSuccesso(true); setTimeout(() => router.push('/dashboard'), 2000) }
   }
 
   return (
@@ -52,42 +60,61 @@ export default function ResetPasswordPage() {
             <div className="text-center">
               <div className="text-4xl mb-4">✅</div>
               <h2 className="font-head font-bold text-xl text-z-light mb-2">Password aggiornata!</h2>
-              <p className="text-z-muted text-sm">Stai per essere reindirizzato alla dashboard...</p>
+              <p className="text-z-muted text-sm">Reindirizzamento alla dashboard...</p>
             </div>
           ) : (
             <>
               <h2 className="font-head font-bold text-xl text-z-light mb-2">Nuova password</h2>
               <p className="text-z-muted text-sm mb-6">Scegli una password sicura per il tuo account Zipra.</p>
+
               {errore && (
                 <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm p-3 mb-4">
                   {errore}
-                  <div className="mt-2"><a href="/auth/login" className="text-red-400 underline text-xs">← Torna al login</a></div>
+                  <div className="mt-2">
+                    <a href="/auth/login" className="text-red-400 underline text-xs">← Torna al login</a>
+                  </div>
                 </div>
               )}
+
               {!pronto && !errore && (
                 <div className="text-center py-4">
                   <div className="w-8 h-8 border-2 border-z-green/30 border-t-z-green rounded-full animate-spin mx-auto mb-3" />
-                  <p className="text-z-muted text-sm">Verifica del link in corso...</p>
+                  <p className="text-z-muted text-sm">Verifica in corso...</p>
                 </div>
               )}
+
               {pronto && (
                 <div className="space-y-4">
                   <div>
                     <label className="label-field">Nuova password</label>
-                    <input type="password" value={nuovaPassword} onChange={e => setNuovaPassword(e.target.value)}
-                      placeholder="Minimo 8 caratteri" className="input-field" autoFocus />
+                    <input
+                      type="password"
+                      value={nuovaPassword}
+                      onChange={e => setNuovaPassword(e.target.value)}
+                      placeholder="Minimo 8 caratteri"
+                      className="input-field"
+                      autoFocus
+                    />
                   </div>
                   <div>
                     <label className="label-field">Conferma password</label>
-                    <input type="password" value={conferma} onChange={e => setConferma(e.target.value)}
-                      placeholder="Ripeti la password" className="input-field"
-                      onKeyDown={e => e.key === 'Enter' && handleReset()} />
+                    <input
+                      type="password"
+                      value={conferma}
+                      onChange={e => setConferma(e.target.value)}
+                      placeholder="Ripeti la password"
+                      className="input-field"
+                      onKeyDown={e => e.key === 'Enter' && handleReset()}
+                    />
                   </div>
                   {nuovaPassword.length > 0 && conferma.length > 0 && nuovaPassword !== conferma && (
                     <p className="text-xs text-red-400">Le password non coincidono</p>
                   )}
-                  <button onClick={handleReset} disabled={loading}
-                    className="btn-primary w-full justify-center py-3 disabled:opacity-50">
+                  <button
+                    onClick={handleReset}
+                    disabled={loading}
+                    className="btn-primary w-full justify-center py-3 disabled:opacity-50"
+                  >
                     {loading ? '⏳ Salvataggio...' : '🔐 Imposta nuova password'}
                   </button>
                 </div>
