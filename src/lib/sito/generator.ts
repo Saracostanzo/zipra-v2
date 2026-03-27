@@ -367,7 +367,7 @@ export async function pubblicaSuVercel(
   html: string,
   nomeProgetto: string,
 ): Promise<string | null> {
-  if (!process.env.VERCEL_TOKEN) return null;
+  if (!process.env.ZIPRA_VERCEL_TOKEN) return null;
 
   const slugProgetto = nomeProgetto
     .toLowerCase()
@@ -381,7 +381,7 @@ export async function pubblicaSuVercel(
     const res = await fetch("https://api.vercel.com/v13/deployments", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.VERCEL_TOKEN}`,
+       Authorization: `Bearer ${process.env.ZIPRA_VERCEL_TOKEN}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
