@@ -28,6 +28,247 @@ const STATI_PROGRESS = [
 
 const PIANI_ABBONAMENTO = ['base', 'pro', 'mantenimento', 'business', 'business_pro']
 
+// PATH: src/app/dashboard/page.tsx
+// Sostituisci il componente PannelloProFeatures con questo
+
+function PannelloProFeatures({ pratiche, userId }: { pratiche: any[], userId: string }) {
+  const router = useRouter()
+  const [generando, setGenerando] = useState<string | null>(null)
+  const [sitiGenerati, setSitiGenerati] = useState<Record<string, string>>({})
+  const [praticaSelezionata, setPraticaSelezionata] = useState<any>(null)
+  const [form, setForm] = useState({
+    telefono: '',
+    email: '',
+    indirizzo: '',
+    orari: '',
+    descrizione: '',
+    servizi: '',
+  })
+
+  const praticheAttive = pratiche.filter(p =>
+    ['pagata', 'firma_inviata', 'in_revisione_admin', 'in_lavorazione', 'inviata_ente', 'completata'].includes(p.stato)
+  )
+
+  const apriForm = (p: any) => {
+    setPraticaSelezionata(p)
+    setForm({ telefono: '', email: '', indirizzo: '', orari: '', descrizione: '', servizi: '' })
+  }
+
+  const generaSito = async () => {
+    if (!praticaSelezionata) return
+    setGenerando(praticaSelezionata.id)
+    setPraticaSelezionata(null)
+    try {
+      const res = await fetch('/api/sito-vetrina', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          praticaId: praticaSelezionata.id,
+          datiAggiuntivi: {
+            telefono: form.telefono,
+            email: form.email,
+            indirizzo: form.indirizzo,
+            orari: form.orari,
+            descrizione: form.descrizione,
+            servizi: form.servizi.split('\n').map(s => s.trim()).filter(Boolean),
+          },
+        }),
+      })
+      const data = await res.json()
+      if (data.sitoId) {
+        setSitiGenerati(prev => ({ ...prev, [praticaSelezionata.id]: data.sitoId }))
+        router.push(`/dashboard/sito/${data.sitoId}`)
+      } else {
+        alert(data.error ?? 'Errore generazione sito. Riprova.')
+      }
+    } finally {
+      setGenerando(null)
+    }
+  }
+
+  if (praticheAttive.length === 0) return null
+
+  return (
+    <div className="mt-10">
+
+      {/* Modal raccolta dati */}
+      {praticaSelezionata && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
+          <div className="bg-z-card border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="font-head font-bold text-z-light text-lg">Crea il tuo sito web</h2>
+                  <p className="text-z-muted text-xs mt-0.5">{praticaSelezionata.nome_impresa} · {praticaSelezionata.comune_sede}</p>
+                </div>
+                <button onClick={() => setPraticaSelezionata(null)} className="text-z-muted/40 hover:text-z-muted text-2xl">×</button>
+              </div>
+
+              <p className="text-z-muted text-sm mb-5">
+                Dimmi qualcosa in più sulla tua attività — l'AI genererà testi, logo e layout su misura.
+                Tutti i campi sono opzionali, ma più informazioni dai più il sito sarà personalizzato.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="label-field">Descrivi la tua attività *</label>
+                  <textarea
+                    value={form.descrizione}
+                    onChange={e => setForm(prev => ({ ...prev, descrizione: e.target.value }))}
+                    placeholder={`Es: Siamo un bar storico nel centro di ${praticaSelezionata.comune_sede}, aperto dal 1985. Offriamo colazioni, pranzi e aperitivi con prodotti locali...`}
+                    className="input-field min-h-[90px] resize-none text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="label-field">Servizi principali (uno per riga)</label>
+                  <textarea
+                    value={form.servizi}
+                    onChange={e => setForm(prev => ({ ...prev, servizi: e.target.value }))}
+                    placeholder={`Es:\nColazione e cornetti freschi\nAperitivo con stuzzichini\nPranzo veloce\nCaffè specialty`}
+                    className="input-field min-h-[90px] resize-none text-sm font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label-field">Telefono</label>
+                    <input
+                      value={form.telefono}
+                      onChange={e => setForm(prev => ({ ...prev, telefono: e.target.value }))}
+                      placeholder="+39 333 1234567"
+                      className="input-field text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="label-field">Email contatti</label>
+                    <input
+                      value={form.email}
+                      onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
+                      placeholder="info@tuaimpresa.it"
+                      className="input-field text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label-field">Indirizzo</label>
+                  <input
+                    value={form.indirizzo}
+                    onChange={e => setForm(prev => ({ ...prev, indirizzo: e.target.value }))}
+                    placeholder={`Es: Via Roma 10, ${praticaSelezionata.comune_sede}`}
+                    className="input-field text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="label-field">Orari di apertura</label>
+                  <input
+                    value={form.orari}
+                    onChange={e => setForm(prev => ({ ...prev, orari: e.target.value }))}
+                    placeholder="Es: Lun-Sab 7:00-20:00, Dom 8:00-13:00"
+                    className="input-field text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setPraticaSelezionata(null)}
+                  className="btn-secondary flex-1 justify-center text-sm"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={generaSito}
+                  disabled={!form.descrizione.trim()}
+                  className="btn-primary flex-1 justify-center text-sm disabled:opacity-50"
+                >
+                  🚀 Genera sito →
+                </button>
+              </div>
+              <p className="text-xs text-z-muted/40 text-center mt-3">
+                La generazione richiede 2-3 minuti. Riceverai una email quando il sito è pronto.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-2xl">⭐</span>
+        <div>
+          <h2 className="font-head font-bold text-z-light text-xl">Funzioni Piano Pro</h2>
+          <p className="text-z-muted text-xs mt-0.5">Sito web, logo AI e Google Business inclusi nel tuo abbonamento</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {praticheAttive.map(p => {
+          const sitoId = sitiGenerati[p.id]
+          const staGenerando = generando === p.id
+          return (
+            <div key={p.id} className="bg-z-mid border border-white/8 rounded-2xl p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-z-light text-sm truncate">{p.nome_impresa}</h3>
+                  <p className="text-z-muted/60 text-xs mt-0.5">{p.comune_sede} ({p.provincia_sede})</p>
+                </div>
+                {!sitoId && !staGenerando && (
+                  <button
+                    onClick={() => apriForm(p)}
+                    className="btn-primary text-xs py-2 px-4 shrink-0"
+                  >
+                    🌐 Genera sito + logo + Google Business
+                  </button>
+                )}
+                {sitoId && !staGenerando && (
+                  <a href={`/dashboard/sito/${sitoId}`} className="btn-secondary text-xs py-2 px-4 shrink-0">
+                    ✏️ Gestisci sito →
+                  </a>
+                )}
+              </div>
+
+              {staGenerando && (
+                <div className="mt-4 bg-z-darker rounded-xl p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-4 h-4 border-2 border-z-green/30 border-t-z-green rounded-full animate-spin shrink-0" />
+                    <span className="text-z-light text-sm font-bold">Generazione in corso...</span>
+                  </div>
+                  <div className="space-y-1 text-xs text-z-muted/60">
+                    <p>🎨 Generazione logo AI con i colori del brand</p>
+                    <p>✍️ Scrittura testi ottimizzati per SEO locale</p>
+                    <p>🌐 Pubblicazione sito su dominio dedicato</p>
+                    <p>📍 Preparazione guida Google Business Profile</p>
+                  </div>
+                  <p className="text-xs text-z-muted/40 mt-3">Riceverai una email quando è pronto.</p>
+                </div>
+              )}
+
+              {!sitoId && !staGenerando && (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {[
+                    { icon: '🌐', label: 'Sito web', desc: 'Generato con AI e pubblicato online' },
+                    { icon: '🎨', label: 'Logo AI', desc: 'Logo personalizzato per il tuo brand' },
+                    { icon: '📍', label: 'Google Business', desc: 'Guida con dati pre-compilati' },
+                  ].map(f => (
+                    <div key={f.label} className="bg-z-darker rounded-xl p-3 text-center">
+                      <div className="text-xl mb-1">{f.icon}</div>
+                      <p className="text-z-light text-xs font-bold">{f.label}</p>
+                      <p className="text-z-muted/50 text-[10px] mt-0.5">{f.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Pannello Mantenimento ────────────────────────────────────────────────────
 function PannelloMantenimento({ pianoAttivo }: { pianoAttivo: boolean }) {
   if (pianoAttivo) return null
   return (
@@ -46,12 +287,12 @@ function PannelloMantenimento({ pianoAttivo }: { pianoAttivo: boolean }) {
   )
 }
 
+// ─── Pratiche correlate ───────────────────────────────────────────────────────
 function PraticheCorrrelate({ pratica, pianoAttivo }: { pratica: any, pianoAttivo: boolean }) {
   const router = useRouter()
   const praticheSuggerite = CATALOGO.filter(p => {
     if (p.id === 'apertura_ditta' || p.id === 'apertura_srl') return false
-    const correlate = ['variazione_sede', 'variazione_ateco', 'variazione_pec', 'suap_modifica', 'deposito_bilancio', 'diritto_annuale', 'rinnovo_sanitario', 'cessazione_ditta']
-    return correlate.includes(p.id)
+    return ['variazione_sede', 'variazione_ateco', 'variazione_pec', 'suap_modifica', 'deposito_bilancio', 'diritto_annuale', 'rinnovo_sanitario', 'cessazione_ditta'].includes(p.id)
   }).slice(0, 4)
 
   if (praticheSuggerite.length === 0) return null
@@ -92,6 +333,7 @@ function PraticheCorrrelate({ pratica, pianoAttivo }: { pratica: any, pianoAttiv
   )
 }
 
+// ─── Pannello dettaglio pratica ───────────────────────────────────────────────
 function PannelloDettaglioPratica({
   pratica,
   analisi,
@@ -193,20 +435,15 @@ function PannelloDettaglioPratica({
     )
   }
 
-  // Documenti ancora mancanti (non caricati in questa sessione)
-  const documentiAncoraScoperti = docDaCaricare.filter(
-    (doc: any) => !uploadOk.has(doc.id ?? doc.nome)
-  )
-
+  const documentiAncoraScoperti = docDaCaricare.filter((doc: any) => !uploadOk.has(doc.id ?? doc.nome))
   const statoAbilitaRevisione = ['pagata', 'firma_inviata'].includes(pratica.stato)
-  // Il bottone è attivo SOLO se: stato corretto E tutti i documenti caricati
   const puoInviareRevisione = statoAbilitaRevisione && documentiAncoraScoperti.length === 0
 
   return (
     <div className="border-t border-white/8 bg-z-darker">
       <div className="p-5 grid md:grid-cols-2 gap-6">
 
-        {/* COLONNA SX — cosa fa Zipra */}
+        {/* COLONNA SX */}
         <div>
           <div className="text-xs font-mono text-z-green/60 uppercase tracking-wider mb-3">✨ Zipra gestisce per te</div>
           <div className="space-y-2">
@@ -256,7 +493,7 @@ function PannelloDettaglioPratica({
           </div>
         </div>
 
-        {/* COLONNA DX — documenti + prezzo + invio */}
+        {/* COLONNA DX */}
         <div>
           <div className="text-xs font-mono text-blue-400/60 uppercase tracking-wider mb-3">📎 Documenti da caricare</div>
           {docDaCaricare.length === 0 ? (
@@ -298,11 +535,9 @@ function PannelloDettaglioPratica({
             </div>
           )}
 
-          {/* Prezzo corretto */}
+          {/* Prezzo */}
           <div className="flex gap-3 mt-4">
-            <div className="flex-1 bg-z-mid rounded-xl p-3 text-center">
-              {renderPrezzo()}
-            </div>
+            <div className="flex-1 bg-z-mid rounded-xl p-3 text-center">{renderPrezzo()}</div>
             {analisi?.tempi_totali && (
               <div className="flex-1 bg-z-mid rounded-xl p-3 text-center">
                 <div className="font-bold text-z-light text-lg">{analisi.tempi_totali}</div>
@@ -317,9 +552,7 @@ function PannelloDettaglioPratica({
               <p className="text-xs text-amber-400 font-bold mb-1">
                 ⚠️ Mancano ancora {documentiAncoraScoperti.length} document{documentiAncoraScoperti.length === 1 ? 'o' : 'i'}
               </p>
-              <p className="text-xs text-amber-400/70">
-                Carica tutti i documenti richiesti per poter inviare la pratica in revisione.
-              </p>
+              <p className="text-xs text-amber-400/70">Carica tutti i documenti per poter inviare in revisione.</p>
               <ul className="mt-1.5 space-y-0.5">
                 {documentiAncoraScoperti.map((doc: any) => (
                   <li key={doc.id ?? doc.nome} className="text-xs text-amber-400/60">• {doc.nome}</li>
@@ -328,7 +561,7 @@ function PannelloDettaglioPratica({
             </div>
           )}
 
-          {/* Bottone invia in revisione — solo se stato corretto E documenti tutti caricati */}
+          {/* Bottone invia in revisione */}
           {puoInviareRevisione && (
             <div className="mt-3">
               <button
@@ -347,6 +580,7 @@ function PannelloDettaglioPratica({
   )
 }
 
+// ─── Pagina principale ────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
@@ -509,7 +743,7 @@ export default function DashboardPage() {
           <a href="/wizard" className="btn-primary">+ Nuova pratica</a>
         </div>
 
-        {/* Banner firma con "Ho già firmato — verifica" */}
+        {/* Banner firma */}
         {pratiche.length > 0 && !profilo?.firma_digitale_autorizzata && (
           <div className="bg-amber-400/8 border border-amber-400/20 rounded-2xl px-5 py-4 flex items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
@@ -626,6 +860,12 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Sezione funzioni Pro — solo per piano pro */}
+        {profilo?.piano === 'pro' && pratiche.length > 0 && (
+          <PannelloProFeatures pratiche={pratiche} userId={profilo.id} />
+        )}
+
+        {/* Archivio */}
         {pratiche.length > 0 && (
           <div className="mt-10">
             <h2 className="font-head font-bold text-z-light text-xl mb-4">🗄️ Archivio e conservazione</h2>

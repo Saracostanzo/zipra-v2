@@ -1,20 +1,20 @@
+// PATH: src/app/api/sito/genera/route.ts
+//
+// Genera sito + logo + Google Business per:
+//   1. Cliente Piano Pro → targetUserId = user.id (auto)
+//   2. Commercialista per un cliente → targetUserId = clienteUserId, businessId fornito
+//
+// Body:
+//   praticaId:     string   — pratica da cui prendere i dati base
+//   datiManuali:   object   — dati inseriti dall'utente nel form
+//   clienteUserId: string?  — solo business: userId del cliente target
+//   businessId:    string?  — solo business: ID account business
+
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generaTuttoSitoVetrina, DatiSitoVetrina } from "@/lib/sito/generator";
+import { inviaNotifica } from "@/lib/notifications/service";
 
-/**
- * POST /api/sito/genera
- *
- * Genera sito + logo + guida Google Business per:
- *   - Cliente privato Piano Pro
- *   - Commercialista per i suoi clienti (Piano Business con crediti)
- *
- * Body:
- *   praticaId: string (opzionale — prende i dati dalla pratica)
- *   datiManuali: DatiSitoVetrina (opzionale — override manuale)
- *   clienteUserId: string (opzionale — per commercialisti che generano per cliente)
- */
 export async function POST(req: NextRequest) {
   const supabase = createServerSupabaseClient();
   const {
@@ -23,132 +23,224 @@ export async function POST(req: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
 
-  const { praticaId, datiManuali, clienteUserId } = await req.json();
-  const adminSupabase = createAdminClient();
+  const { praticaId, datiManuali, clienteUserId, businessId } =
+    await req.json();
+  const admin = createAdminClient();
 
-  // Recupera profilo
-  const { data: profile } = await adminSupabase
+  // ── Recupera profilo chi fa la richiesta ──────────────────────────────────
+  const { data: profile } = await admin
     .from("profiles")
     .select("piano, tipo_account, nome, cognome, email, telefono")
     .eq("id", user.id)
     .single();
 
-  // Controlla autorizzazione
   const isPro = profile?.piano === "pro";
-  const isBusiness = ["commercialista", "caf", "agenzia"].includes(
-    profile?.tipo_account ?? "",
-  );
-  const isAdmin = profile?.piano === "admin"; // per test
+  const isBusiness =
+    ["commercialista", "caf", "agenzia", "patronato"].includes(
+      profile?.tipo_account ?? "",
+    ) || ["business", "business_pro"].includes(profile?.piano ?? "");
 
-  if (!isPro && !isBusiness && !isAdmin) {
+  if (!isPro && !isBusiness) {
     return NextResponse.json(
-      {
-        error: "Piano Pro o Business richiesto",
-        upgradeUrl: "/prezzi",
-      },
+      { error: "Piano Pro o Business richiesto", upgradeUrl: "/prezzi" },
       { status: 403 },
     );
   }
 
-  // Per i business: controlla crediti sito disponibili
-  if (isBusiness && !isAdmin) {
-    const { data: business } = await adminSupabase
-      .from("business_accounts")
-      .select("id, piano")
-      .eq("owner_id", user.id)
+  // ── Determina il cliente target ───────────────────────────────────────────
+  // Pro: genera per se stesso
+  // Business: genera per il cliente specificato
+  const targetUserId = isBusiness && clienteUserId ? clienteUserId : user.id;
+
+  // Se business, verifica che il cliente appartenga al business
+  if (isBusiness && clienteUserId && businessId) {
+    const { data: relazione } = await admin
+      .from("business_clienti")
+      .select("id")
+      .eq("business_id", businessId)
+      .eq("cliente_id", clienteUserId)
       .single();
 
-    if (business) {
-      // Conta siti generati questo mese
-      const inizioMese = new Date();
-      inizioMese.setDate(1);
-      inizioMese.setHours(0, 0, 0, 0);
+    if (!relazione) {
+      return NextResponse.json(
+        { error: "Cliente non trovato nel tuo account" },
+        { status: 403 },
+      );
+    }
 
-      const { count } = await adminSupabase
-        .from("siti_vetrina")
-        .select("id", { count: "exact" })
-        .eq("user_id", user.id)
-        .gte("created_at", inizioMese.toISOString());
+    // Controlla limite siti mensili per il piano business
+    const inizioMese = new Date();
+    inizioMese.setDate(1);
+    inizioMese.setHours(0, 0, 0, 0);
+    const { count } = await admin
+      .from("siti_vetrina")
+      .select("id", { count: "exact" })
+      .eq("generato_da_business_id", businessId)
+      .gte("created_at", inizioMese.toISOString());
 
-      const limiteMensile = business.piano === "white_label" ? 999 : 3;
-      if ((count ?? 0) >= limiteMensile) {
-        return NextResponse.json(
-          {
-            error: `Hai raggiunto il limite di ${limiteMensile} siti questo mese`,
-            upgradeUrl: "/prezzi",
-          },
-          { status: 403 },
-        );
-      }
+    const limite = profile?.piano === "business_pro" ? 999 : 3;
+    if ((count ?? 0) >= limite) {
+      return NextResponse.json(
+        {
+          error: `Hai raggiunto il limite di ${limite} siti questo mese. Passa a Business Pro per siti illimitati.`,
+          upgradeUrl: "/prezzi",
+        },
+        { status: 403 },
+      );
     }
   }
 
-  // Determina l'utente destinatario (il cliente, non il commercialista)
-  const targetUserId = clienteUserId ?? user.id;
+  // ── Verifica pratica ──────────────────────────────────────────────────────
+  const { data: pratica } = await admin
+    .from("pratiche")
+    .select("*")
+    .eq("id", praticaId)
+    .eq("user_id", targetUserId)
+    .single();
 
-  // Costruisce i dati sito
-  let datiSito: DatiSitoVetrina | null = datiManuali ?? null;
+  if (!pratica)
+    return NextResponse.json({ error: "Pratica non trovata" }, { status: 404 });
 
-  if (!datiSito && praticaId) {
-    const { data: pratica } = await adminSupabase
-      .from("pratiche")
-      .select("*, user:profiles(nome, cognome, email, telefono)")
-      .eq("id", praticaId)
-      .single();
+  // ── Crea record sito in stato "generazione" ───────────────────────────────
+  const { data: sito, error: sitoError } = await admin
+    .from("siti_vetrina")
+    .insert({
+      user_id: targetUserId,
+      pratica_id: praticaId,
+      generato_da_business_id: businessId ?? null,
+      stato: "generazione",
+      testi: {
+        descrizione_utente: datiManuali?.descrizione ?? "",
+        servizi_utente: datiManuali?.servizi ?? [],
+        telefono: datiManuali?.telefono ?? "",
+        email: datiManuali?.email ?? "",
+        indirizzo: datiManuali?.indirizzo ?? "",
+        orari: datiManuali?.orari ?? "",
+      },
+    })
+    .select("id")
+    .single();
 
-    if (pratica) {
-      datiSito = {
-        nomeImpresa: pratica.nome_impresa,
-        settore: pratica.tipo_attivita,
-        comuneSede: pratica.comune_sede,
-        provinciaSede: pratica.provincia_sede,
-        descrizioneAttivita: pratica.analisi_ai ?? pratica.tipo_attivita,
-        telefono: pratica.user?.telefono,
-        email: pratica.user?.email ?? profile?.email ?? "",
+  if (sitoError || !sito) {
+    console.error("[sito/genera] Errore creazione record:", sitoError);
+    return NextResponse.json({ error: "Errore interno" }, { status: 500 });
+  }
+
+  // ── Avvia generazione in background ──────────────────────────────────────
+  generaInBackground({
+    sitoId: sito.id,
+    targetUserId,
+    businessId: businessId ?? null,
+    pratica,
+    datiManuali,
+    admin,
+  }).catch((e) => console.error("[sito/genera] Errore background:", e));
+
+  return NextResponse.json({ sitoId: sito.id, stato: "generazione" });
+}
+
+async function generaInBackground({
+  sitoId,
+  targetUserId,
+  businessId,
+  pratica,
+  datiManuali,
+  admin,
+}: {
+  sitoId: string;
+  targetUserId: string;
+  businessId: string | null;
+  pratica: any;
+  datiManuali: any;
+  admin: any;
+}) {
+  try {
+    let urlPubblicato: string | null = null;
+    let logoUrl: string | null = null;
+    let testi: any = {};
+
+    // Prova il generatore completo — fallback a revisione manuale se non disponibile
+    try {
+      const { generaTuttoSitoVetrina } = await import("@/lib/sito/generator");
+      const risultato = await generaTuttoSitoVetrina({
+        userId: targetUserId,
+        praticaId: pratica.id,
+        dati: {
+          nomeImpresa: pratica.nome_impresa,
+          settore: pratica.tipo_attivita ?? "",
+          comuneSede: pratica.comune_sede,
+          provinciaSede: pratica.provincia_sede,
+          descrizione: datiManuali?.descrizione ?? "",
+          servizi: datiManuali?.servizi ?? [],
+          telefono: datiManuali?.telefono ?? "",
+          email: datiManuali?.email ?? "",
+          indirizzo: datiManuali?.indirizzo ?? "",
+          orari: datiManuali?.orari ?? "",
+        },
+        isWhiteLabel: !!businessId,
+      });
+      urlPubblicato = risultato?.urlPubblicato ?? null;
+      logoUrl = risultato?.logoUrl ?? null;
+      testi = risultato?.testi ?? {};
+    } catch (e: any) {
+      console.warn(
+        "[sito/genera] Generatore non disponibile, revisione manuale:",
+        e.message,
+      );
+      testi = {
+        headline: `${pratica.nome_impresa}`,
+        sottotitolo: `${pratica.tipo_attivita ?? ""} a ${pratica.comune_sede}`,
+        descrizione: datiManuali?.descrizione ?? "",
+        servizi: datiManuali?.servizi ?? [],
+        telefono: datiManuali?.telefono ?? "",
+        email: datiManuali?.email ?? "",
+        indirizzo: datiManuali?.indirizzo ?? "",
+        orari: datiManuali?.orari ?? "",
       };
     }
-  }
 
-  if (!datiSito) {
-    // Fallback dai dati profilo
-    datiSito = {
-      nomeImpresa: `${profile?.nome} ${profile?.cognome}`,
-      settore: "Attività professionale",
-      comuneSede: "",
-      provinciaSede: "",
-      descrizioneAttivita: "Attività professionale",
-      email: profile?.email ?? "",
-      telefono: profile?.telefono,
-    };
-  }
+    const nomeDominio = urlPubblicato
+      ? urlPubblicato.replace("https://", "")
+      : `zipra-${pratica.nome_impresa
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "")}.vercel.app`;
 
-  // Aggiunge dati white label se è un commercialista
-  if (isBusiness) {
-    const { data: business } = await adminSupabase
-      .from("business_accounts")
-      .select("nome, logo_url")
-      .eq("owner_id", user.id)
-      .single();
+    await admin
+      .from("siti_vetrina")
+      .update({
+        stato: urlPubblicato ? "pubblicato" : "revisione",
+        url_pubblicato: urlPubblicato,
+        nome_dominio: nomeDominio,
+        testi,
+        logo_url: logoUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", sitoId);
 
-    if (business) {
-      datiSito.nomeStudio = business.nome;
-      datiSito.logoStudioUrl = business.logo_url;
-    }
-  }
-
-  // Avvia generazione asincrona
-  (async () => {
-    await generaTuttoSitoVetrina({
+    // Notifica utente target (il cliente)
+    await inviaNotifica({
       userId: targetUserId,
-      praticaId,
-      dati: datiSito!,
-      isWhiteLabel: isBusiness,
+      tipo: "sito_pronto",
+      titolo: urlPubblicato
+        ? "🌐 Il tuo sito è online!"
+        : "🌐 Sito in preparazione",
+      messaggio: urlPubblicato
+        ? `Il sito di ${pratica.nome_impresa} è pronto su ${nomeDominio}. Controlla anche la guida Google Business in email.`
+        : `Il sito di ${pratica.nome_impresa} è stato preparato. Il team Zipra lo pubblicherà presto.`,
+      praticaId: pratica.id,
+      azioneUrl: `/dashboard/sito/${sitoId}`,
+      canali: ["db", "email"],
     });
-  })();
 
-  return NextResponse.json({
-    success: true,
-    message:
-      "Generazione avviata — riceverai email con sito e guida Google Business in pochi minuti",
-  });
+    console.log(
+      `[sito/genera] ✅ Completato — sito ${sitoId} per user ${targetUserId}`,
+    );
+  } catch (e: any) {
+    console.error("[sito/genera] Errore background:", e.message);
+    await admin
+      .from("siti_vetrina")
+      .update({ stato: "errore", updated_at: new Date().toISOString() })
+      .eq("id", sitoId);
+  }
 }
