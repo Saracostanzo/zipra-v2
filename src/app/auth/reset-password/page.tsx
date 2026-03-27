@@ -13,30 +13,37 @@ export default function ResetPasswordPage() {
   const [successo, setSuccesso] = useState(false)
   const [pronto, setPronto] = useState(false)
 
-  useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('code')
+useEffect(() => {
+  const hash = window.location.hash
+  const params = new URLSearchParams(hash.replace('#', ''))
+  const accessToken = params.get('access_token')
+  const type = params.get('type')
 
-    if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
-        if (error || !data.session) {
-          setErrore('Link non valido o scaduto. Richiedine uno nuovo.')
-        } else {
-          setPronto(true)
-        }
-      })
-      return
-    }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setPronto(true)
+  if (accessToken && type === 'recovery') {
+    supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: params.get('refresh_token') ?? '',
+    }).then(({ error }) => {
+      if (error) setErrore('Link non valido o scaduto.')
+      else setPronto(true)
     })
+    return
+  }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setPronto(true)
+  const code = new URLSearchParams(window.location.search).get('code')
+  if (code) {
+    supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+      if (error || !data.session) setErrore('Link non valido o scaduto.')
+      else setPronto(true)
     })
+    return
+  }
 
-    return () => subscription.unsubscribe()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') setPronto(true)
+  })
+  return () => subscription.unsubscribe()
+}, []) // eslint-disable-line react-hooks/exhaustive-deps []) 
 
   const handleReset = async () => {
     setErrore('')
