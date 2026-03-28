@@ -73,16 +73,15 @@ export default function SitoPage() {
           </button>
           <h1 className="font-bold text-z-light">Sito vetrina — {nomeSito}</h1>
           <div className="ml-auto">
-            <span className={`text-xs font-mono px-2 py-1 rounded-full ${
-              sito.stato === 'pubblicato' ? 'bg-z-green/15 text-z-green' :
-              sito.stato === 'generazione' ? 'bg-amber-400/15 text-amber-400' :
-              sito.stato === 'revisione' ? 'bg-blue-400/15 text-blue-400' :
-              'bg-red-400/15 text-red-400'
-            }`}>
+            <span className={`text-xs font-mono px-2 py-1 rounded-full ${sito.stato === 'pubblicato' ? 'bg-z-green/15 text-z-green' :
+                sito.stato === 'generazione' ? 'bg-amber-400/15 text-amber-400' :
+                  sito.stato === 'revisione' ? 'bg-blue-400/15 text-blue-400' :
+                    'bg-red-400/15 text-red-400'
+              }`}>
               {sito.stato === 'pubblicato' ? '✅ Pubblicato' :
-               sito.stato === 'generazione' ? '⏳ In generazione' :
-               sito.stato === 'revisione' ? '🔍 In revisione' :
-               '❌ Errore'}
+                sito.stato === 'generazione' ? '⏳ In generazione' :
+                  sito.stato === 'revisione' ? '🔍 In revisione' :
+                    '❌ Errore'}
             </span>
           </div>
         </div>
@@ -176,7 +175,9 @@ export default function SitoPage() {
                   )}
                 </div>
                 <p className="text-xs text-z-muted/40 mt-5">
-                  Per modificare i contenuti contatta il supporto Zipra — editor AI in arrivo.
+                  <a href={`/sito-editor/${id}`} className="text-z-green hover:underline font-medium">
+                    ✏️ Modifica il sito con l'AI →
+                  </a>
                 </p>
               </div>
             )}
