@@ -7,12 +7,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 // ─── Piani ────────────────────────────────────────────────────────────────────
 
 export const PIANI = {
-  base:         { nome: 'Piano Base',      prezzo: 149, intervallo: 'anno' },
-  pro:          { nome: 'Piano Pro',       prezzo: 249, intervallo: 'anno' },
-  mantenimento: { nome: 'Mantenimento',   prezzo: 29,  intervallo: 'mese' },
-  business:     { nome: 'Business',       prezzo: 199, intervallo: 'mese' },
-  business_pro: { nome: 'Business Pro',   prezzo: 299, intervallo: 'mese' },
-  singola:      { nome: 'Pratica singola', prezzo: 199, intervallo: 'una tantum' },
+  base:         { nome: 'Piano Base',       prezzo: 149, importo: 149, intervallo: 'anno',        descrizione: 'Apertura impresa completa + tutte le variazioni per 12 mesi' },
+  pro:          { nome: 'Piano Pro',        prezzo: 249, importo: 249, intervallo: 'anno',        descrizione: 'Piano Base + sito web + Google Business + logo AI' },
+  mantenimento: { nome: 'Mantenimento',     prezzo: 29,  importo: 29,  intervallo: 'mese',        descrizione: 'Adempimenti annuali automatici e notifiche scadenze' },
+  business:     { nome: 'Business',         prezzo: 199, importo: 199, intervallo: 'mese',        descrizione: 'Per CAF, commercialisti e patronati' },
+  business_pro: { nome: 'Business Pro',     prezzo: 299, importo: 299, intervallo: 'mese',        descrizione: 'Business + siti vetrina illimitati per i clienti' },
+  singola:      { nome: 'Pratica singola',  prezzo: 199, importo: 199, intervallo: 'una tantum',  descrizione: 'Pratica singola senza abbonamento' },
 } as const
 
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
@@ -137,8 +137,8 @@ export async function creaCheckoutSession({
     cancel_url: cancelUrl,
     metadata: {
       userId,
-      pianoId:     pianoId ?? "",
-      praticaId:   praticaId ?? "",
+      pianoId:   pianoId ?? "",
+      praticaId: praticaId ?? "",
     },
   });
 

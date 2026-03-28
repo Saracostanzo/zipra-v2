@@ -2,7 +2,7 @@
 //
 // Body atteso:
 //   pianoId    — "base"|"pro"|... per abbonamenti
-//   praticaDbId — UUID database pratica (solo metadata, MAI per price lookup)
+//   praticaId — UUID database pratica (solo metadata, MAI per price lookup)
 //   singola     — "true" per pratica singola a pagamento variabile
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'Body JSON non valido' }, { status: 400 }) }
 
-  const { pianoId, praticaDbId, singola } = body
+  const { pianoId, praticaId, singola } = body
 
   if (!pianoId && !singola) {
     return NextResponse.json(
@@ -38,11 +38,11 @@ export async function POST(req: NextRequest) {
     if (singola === 'true' || singola === true) {
       // Pratica singola — recupera importo dalla pratica
       let importo = 199 // default
-      if (praticaDbId) {
+      if (praticaId) {
         const { data: pratica } = await supabase
           .from('pratiche')
           .select('tipo_attivita, nome_impresa')
-          .eq('id', praticaDbId)
+          .eq('id', praticaId)
           .single()
         if (pratica?.tipo_attivita?.toLowerCase().includes('srl')) importo = 299
       }
@@ -67,12 +67,12 @@ export async function POST(req: NextRequest) {
           },
           quantity: 1,
         }],
-        success_url: `${origin}/checkout/successo?piano=singola&pratica=${praticaDbId ?? ''}`,
+        success_url: `${origin}/checkout/successo?piano=singola&pratica=${praticaId ?? ''}`,
         cancel_url: `${origin}/checkout/annullato`,
         metadata: {
           userId: user.id,
           pianoId: 'singola',
-          praticaDbId: praticaDbId ?? '',
+          praticaId: praticaId ?? '',
         },
       })
 
@@ -83,15 +83,15 @@ export async function POST(req: NextRequest) {
         userId: user.id,
         email: user.email!,
         pianoId: pianoId as PianoId,
-        praticaDbId: praticaDbId ?? null,
-        successUrl: `${origin}/checkout/successo?piano=${pianoId}&pratica=${praticaDbId ?? ''}`,
+        praticaId: praticaId ?? null,
+        successUrl: `${origin}/checkout/successo?piano=${pianoId}&pratica=${praticaId ?? ''}`,
         cancelUrl: `${origin}/checkout/annullato`,
       })
     }
 
     return NextResponse.json({ url })
   } catch (e: any) {
-    console.error('[Stripe checkout]', e?.message, { pianoId, praticaDbId, userId: user.id })
+    console.error('[Stripe checkout]', e?.message, { pianoId, praticaId, userId: user.id })
     return NextResponse.json({ error: e?.message ?? 'Errore creazione checkout' }, { status: 500 })
   }
 }
