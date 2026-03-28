@@ -301,12 +301,12 @@ export async function pubblicaSuVercel(
 
     const path = `siti/${slug}/index.html`;
 
-    const { error } = await supabase.storage
-      .from("siti-vetrina")
-      .upload(path, Buffer.from(html), {
-        contentType: "text/html",
-        upsert: true,
-      });
+ const { error } = await supabase.storage
+  .from("siti-vetrina")
+  .upload(path, Buffer.from(html, 'utf8'), {
+    contentType: "text/html; charset=utf-8",
+    upsert: true,
+  });
 
     if (error) {
       console.error("[Storage] Upload error:", error.message);
