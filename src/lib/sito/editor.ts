@@ -265,7 +265,7 @@ export async function applicaModifica({
   // Rideploya su Vercel
   const nuovoUrl = await pubblicaSuVercel(
     nuovoHTML,
-    sito.nome_dominio ?? `sito-${sitoId}`,
+   sito.url_pubblicato?.split('/sito/')[1] ?? `sito-${sitoId}`,
   );
 
   // Aggiorna DB
