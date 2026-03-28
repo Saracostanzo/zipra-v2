@@ -110,7 +110,7 @@ export default function SitoPage() {
               </div>
               <div className="bg-z-darker rounded-xl p-3 text-center">
                 <p className="text-lg mb-1">🌐</p>
-                <p>Deploy su Vercel</p>
+                <p>Pubblicazione online</p>
               </div>
             </div>
             <p className="text-xs text-z-muted/40 mt-6">
