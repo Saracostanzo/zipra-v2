@@ -59,7 +59,8 @@ Dati impresa:
 - Nome: ${dati.nomeImpresa}
 - Settore: ${dati.settore}
 - Città: ${dati.comuneSede} (${dati.provinciaSede})
-- Descrizione: ${dati.descrizioneAttivita}
+- Descrizione attività: ${dati.descrizioneAttivita}
+- Tipo sede: ${dati.indirizzo ? 'attività fisica con sede a ' + dati.comuneSede : 'attività online — NON mostrare indirizzo fisico nel sito, non usare frasi come "nel cuore di" o "a " + città come se fosse una sede fisica'}
 
 Rispondi SOLO con JSON valido:
 {
@@ -211,15 +212,15 @@ footer a{color:rgba(255,255,255,.4)}
         <span>&#9993;</span>
         <a href="mailto:${dati.email}">${dati.email}</a>
       </div>
-      ${dati.indirizzo ? `
-      <div class="contatto-item">
-        <span>&#128205;</span>
-        <span>${dati.indirizzo}, ${dati.comuneSede} (${dati.provinciaSede})</span>
-      </div>` : `
-      <div class="contatto-item">
-        <span>&#128205;</span>
-        <span>${dati.comuneSede} (${dati.provinciaSede})</span>
-      </div>`}
+   ${dati.indirizzo ? `
+<div class="contatto-item">
+  <span>&#128205;</span>
+  <span>${dati.indirizzo}, ${dati.comuneSede} (${dati.provinciaSede})</span>
+</div>` : `
+<div class="contatto-item">
+  <span>&#127760;</span>
+  <span>Servizio online — operiamo in tutta Italia</span>
+</div>`}
       ${dati.orari ? `
       <div class="contatto-item">
         <span>&#128336;</span>
@@ -312,9 +313,10 @@ export async function pubblicaSuVercel(
       return null;
     }
 
-    const { data } = supabase.storage.from("siti-vetrina").getPublicUrl(path);
-    console.log("[Storage] Sito pubblicato:", data.publicUrl);
-    return data.publicUrl ?? null;
+    // Usa la route proxy che serve l'HTML renderizzato invece dell'URL di Storage diretto
+    const urlProxy = `${process.env.NEXT_PUBLIC_BASE_URL}/sito/${slug}`
+    console.log("[Storage] Sito pubblicato:", urlProxy);
+    return urlProxy;
   } catch (e: any) {
     console.error("[Storage] Error:", e.message);
     return null;
@@ -470,6 +472,7 @@ export async function generaTuttoSitoVetrina({
 
     console.log(`[Sito] Pubblicazione su Supabase Storage...`);
     const urlPubblicato = await pubblicaSuVercel(html, `${dati.nomeImpresa}-${dati.comuneSede}`);
+    
     const nomeDominio = urlPubblicato
       ? urlPubblicato.replace("https://", "")
       : `zipra-${dati.nomeImpresa.toLowerCase().replace(/\s/g, "-")}.supabase.co`;

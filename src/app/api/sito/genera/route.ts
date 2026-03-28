@@ -182,8 +182,8 @@ async function generaInBackground({
       const html = generator.generaHTMLSito(datiPerAI, testi, logoUrl ?? undefined)
       try {
         urlPubblicato = await generator.pubblicaSuVercel(
-          html,
-          `${pratica.nome_impresa}-${pratica.comune_sede}`.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+  html,
+  pratica.nome_impresa  // solo nome impresa, no città
         )
       } catch (e: any) {
         console.warn('[sito/genera] Vercel publish fallito:', e.message)
