@@ -314,7 +314,7 @@ export async function pubblicaSuVercel(
     }
 
     // Usa la route proxy che serve l'HTML renderizzato invece dell'URL di Storage diretto
-    const urlProxy = `${process.env.NEXT_PUBLIC_BASE_URL}/sito/${slug}`
+    const urlProxy = `https://zipra-v2.vercel.app/sito/${slug}`
     console.log("[Storage] Sito pubblicato:", urlProxy);
     return urlProxy;
   } catch (e: any) {
